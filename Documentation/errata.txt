@@ -1,0 +1,25 @@
+List of things that need to be changed for Disc V2
+
+- Flip MCU and Differential-2-SingleEnded transceiver to top of board
+- Replace arming switch connectors for AB and MC with 2 pin horizontal
+- Add thermal reliefs onto GND pads for solderability
+- Space passives around D5 component further out
+- Potentially use different package PMOS-FET for reverse polarity protection
+    - Alternatively, increase pad size for hand soldering
+- Consider flipping board shape to work with mechanical assembly
+- Redundant power supply setup???
+    - Probably unnecessary, but it would add a significant amount of work
+- Add keepout near all mounting holes, large enough for a matching nut
+- Consider rerouting encoder timer and PWM timer pins
+    - Swap which timers each pin on the DRV/Encoder go to, to use repetition counter for PWM
+- Break out any extra I/O into another molex connector elsewhere
+- Replace fuse with properly rated one
+- Commit to differential encoder, so ditch the single-ended option
+- Consider using 64 pin package STM instead of 48
+- Do some passives optimisation to reduce number of parts assembled from JLC
+    - Also buy more stuff from LCSC where possible I suppose
+- Switch placement of BATT IN and AB arming inputs
+    - Whatever to make routing cleaner
+- Move Strelka V2 SPI connector
+    - Make it 90 deg (or 0 whatever) so that it is parallel to motor mount silkscreen
+    - Push it closer-ish to motor mount and maybe add extra cutouts to make the board symmetrical
