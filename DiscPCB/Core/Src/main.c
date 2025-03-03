@@ -91,6 +91,21 @@ const osThreadAttr_t decodeUSBTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
+/* Definitions for adcBattBuff */
+osMessageQueueId_t adcBattBuffHandle;
+const osMessageQueueAttr_t adcBattBuff_attributes = {
+  .name = "adcBattBuff"
+};
+/* Definitions for usbBuff */
+osMessageQueueId_t usbBuffHandle;
+const osMessageQueueAttr_t usbBuff_attributes = {
+  .name = "usbBuff"
+};
+/* Definitions for motorData */
+osMessageQueueId_t motorDataHandle;
+const osMessageQueueAttr_t motorData_attributes = {
+  .name = "motorData"
+};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -204,6 +219,16 @@ int main(void)
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* creation of adcBattBuff */
+  adcBattBuffHandle = osMessageQueueNew (4, sizeof(uint16_t), &adcBattBuff_attributes);
+
+  /* creation of usbBuff */
+  usbBuffHandle = osMessageQueueNew (64, sizeof(uint16_t), &usbBuff_attributes);
+
+  /* creation of motorData */
+  motorDataHandle = osMessageQueueNew (64, sizeof(uint16_t), &motorData_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -245,6 +270,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
   }
   /* USER CODE END 3 */
 }
