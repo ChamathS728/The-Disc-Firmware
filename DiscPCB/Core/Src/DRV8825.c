@@ -7,25 +7,23 @@
 #include "DRV8825.h"
 #include "math.h"
 
-stepperHandle_t* DRV_init(TIM_HandleTypeDef* htimP, ADC_HandleTypeDef* hadc, TIM_HandleTypeDef* htimE, stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr) {
+stepperHandle_t* DRV_init(stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr, stepperRotInfo_t* sRotPtr) {
 	// Create handle
 	stepperHandle_t sHandle = {
-		.stepTimPtr = htimP,
-		.pwrADCPtr = hadc,
-		.encPtr = htimE,
 		.IO = sIOPtr,
-		.cfg = sCfgPtr
+		.cfg = sCfgPtr,
+		.rotInfo = sRotPtr
 	};
 
 	// Pull sleep pin high to enable device
-	HAL_GPIO_WritePin(sHandle->IO->nSleepPort, sHandle->IO->nSleepPin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandle.IO->nSleepPort, sHandle.IO->nSleepPin, GPIO_PIN_SET);
 
 	// Reset indexer logic by pulling nReset high, then move it back
-	HAL_GPIO_WritePin(sHandle->IO->nResetPort, sHandle->IO->nResetPin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(sHandle->IO->nResetPort, sHandle->IO->nResetPin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(sHandle.IO->nResetPort, sHandle.IO->nResetPin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandle.IO->nResetPort, sHandle.IO->nResetPin, GPIO_PIN_RESET);
 
 	// Disable driver by pulling nEnable high
-	HAL_GPIO_WritePin(sHandle->IO->nEnablePort, sHandle->IO->nEnablePin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandle.IO->nEnablePort, sHandle.IO->nEnablePin, GPIO_PIN_SET);
 
 	return &sHandle;
 }
@@ -36,14 +34,14 @@ void DRV_deinit(stepperHandle_t* sHandlePtr) {
 }
 void DRV_sleep(stepperHandle_t* sHandlePtr) {
 	// Pull sleep pin low to sleep the device
-	HAL_GPIO_WritePin(sHandlePtr->IO->nSleepPort, sHandle->IO->nSleepPin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(sHandlePtr->IO->nSleepPort, sHandlePtr->IO->nSleepPin, GPIO_PIN_RESET);
 }
 void DRV_wakeup(stepperHandle_t* sHandlePtr) {
 	// Drive nSleep high
-	HAL_GPIO_WritePin(sHandlePtr->IO->nSleepPort, sHandle->IO->nSleepPin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandlePtr->IO->nSleepPort, sHandlePtr->IO->nSleepPin, GPIO_PIN_SET);
 
 	// Drive NRST high as well
-	HAL_GPIO_WritePin(sHandlePtr->IO->nResetPort, sHandle->IO->nResetPin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandlePtr->IO->nResetPort, sHandlePtr->IO->nResetPin, GPIO_PIN_SET);
 
 	// Wait 1ms for DRV to stabilise
 	osDelay(1);

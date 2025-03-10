@@ -133,16 +133,9 @@ void decodeUSBFn(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-TIM_HandleTypeDef* PWMTimer = htim3;
-TIM_HandleTypeDef* PWMStopTimer = htim4;
-TIM_HandleTypeDef* EncoderTimer = htim1;
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim == PWMStopTimer) {
-		// Timer 3 finished PWM steps
-		HAL_TIM_PWM_Stop(&PWMStopTimer, TIM_CHANNEL_1);
-	}
-}
+TIM_HandleTypeDef* PWMTimer = &htim3;
+TIM_HandleTypeDef* PWMStopTimer = &htim4;
+TIM_HandleTypeDef* EncoderTimer = &htim1;
 
 // Overwrite _write method to use printf for sending to computer
 int _write(int file, char *ptr, int len) {
@@ -837,10 +830,55 @@ void stepperCtrlFn(void *argument)
   /* Infinite loop */
 
 	// Start up stepper handle
+	stepperConfig_t sCfg = {
+			.moveProfile 	= MOVE_TRAP,
+			.stepRes 		= MICROSTEP_1,
+			.stepperDir 	= 0
+	};
+
+	stepperIO_t sIO = {
+			.M0Port 		= MTR_M0_GPIO_Port,
+			.M0Pin 			= MTR_M0_Pin,
+			.M1Port 		= MTR_M1_GPIO_Port,
+			.M1Pin 			= MTR_M1_Pin,
+			.M2Port 		= MTR_M2_GPIO_Port,
+			.M2Pin 			= MTR_M2_Pin,
+			.decayPort 		= MTR_DECAY_GPIO_Port,
+			.decayPin 		= MTR_DECAY_Pin,
+			.dirPort 		= MTR_DIR_GPIO_Port,
+			.dirPin 		= MTR_DIR_Pin,
+			.nEnablePort 	= MTR_NENBL_GPIO_Port,
+			.nEnablePin 	= MTR_NENBL_Pin,
+			.nFaultPort 	= MTR_NFLT_GPIO_Port,
+			.nFaultPort 	= MTR_NFLT_Pin,
+			.nHomePort 		= MTR_NHOME_GPIO_Port,
+			.nHomePin	 	= MTR_NHOME_Pin,
+			.nResetPort 	= MTR_NRST_GPIO_Port,
+			.nResetPin 		= MTR_NRST_Pin,
+			.nSleepPort 	= MTR_NSLP_GPIO_Port,
+			.nSleepPin 		= MTR_NSLP_Pin
+	};
+
+	stepperRotInfo_t sRot = {
+			.PWMPtr 		= PWMTimer,
+			.PWMStopPtr 	= PWMStopTimer,
+			.driveRes 		= REV_1,
+			.driverSteps 	= 0,
+			.encPPR 		= 1000,
+			.encPtr 		= EncoderTimer,
+			.encPulses 		= 0,
+			.maxAngle 		= 90.0,
+			.minAngle 		= 0.0
+	};
+
+	stepperHandle_t* blah = DRV_init(&sCfg, &sIO, &sRot);
 
   for(;;)
   {
-    osDelay(1);
+//	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+//	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+//	  DRV_move_steps(blah, 500, 0);
+    osDelay(1000);
   }
   /* USER CODE END stepperCtrlFn */
 }
@@ -897,6 +935,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM6) {
     HAL_IncTick();
+  }
+  else if (htim == PWMStopTimer) {
+		// Timer 3 finished PWM steps
+		HAL_TIM_PWM_Stop(&PWMStopTimer, TIM_CHANNEL_1);
   }
   /* USER CODE BEGIN Callback 1 */
 

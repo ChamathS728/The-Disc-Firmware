@@ -38,7 +38,7 @@
 
 /* CMSIS compiler specific defines */
 #ifndef   __ASM
-  #define __ASM                                  __asm
+  #define __ASM;                                  __asm
 #endif
 #ifndef   __INLINE
   #define __INLINE                               inline

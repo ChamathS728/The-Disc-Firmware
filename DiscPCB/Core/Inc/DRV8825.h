@@ -80,8 +80,6 @@ typedef struct stepperIO_t {
 typedef struct stepperConfig_t {
 	eMicrostepMode stepRes;
 
-	uint16_t encoderResolution;
-
 	eMovementProfile moveProfile;
 
 	uint8_t stepperDir;
@@ -115,9 +113,6 @@ typedef struct stepperRotInfo_t {
 } stepperRotInfo_t;
 
 typedef struct stepperHandle_t {
-	// ADC handle for motor current sense
-	ADC_HandleTypeDef* pwrADCPtr;
-
 	// Stepper motor configuration
 	stepperConfig_t* cfg;
 
@@ -131,7 +126,7 @@ typedef struct stepperHandle_t {
 
 /* Methods */
 
-stepperHandle_t* DRV_init(TIM_HandleTypeDef* htimP, ADC_HandleTypeDef* hadc, TIM_HandleTypeDef* htimE, stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr);
+stepperHandle_t* DRV_init(stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr, stepperRotInfo_t* sRotPtr);
 void DRV_deinit(stepperHandle_t* stepperHandlePtr);
 void DRV_sleep(stepperHandle_t* stepperHandlePtr);
 void DRV_wakeup(stepperHandle_t* stepperHandlePtr);
@@ -139,7 +134,7 @@ void DRV_microstep_config(stepperHandle_t* stepperHandlePtr, eMicrostepMode micr
 void DRV_movement_config(stepperHandle_t* stepperHandlePtr, eMovementProfile profile);
 
 void DRV_start(stepperHandle_t* stepperHandlePtr);
-void DRV_move_steps(uint16_t steps, uint8_t dir);
+void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir);
 void DRV_read_current(ADC_HandleTypeDef* hadc);
 void DRV_move_angle(stepperHandle_t* sHandlePtr, float angleAbs);
 void DRV_retract_full(void);

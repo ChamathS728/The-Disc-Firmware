@@ -1,0 +1,11 @@
+../Core/Src/DRV8825.c:10:18:DRV_init	1
+../Core/Src/DRV8825.c:30:6:DRV_deinit	1
+../Core/Src/DRV8825.c:35:6:DRV_sleep	1
+../Core/Src/DRV8825.c:39:6:DRV_wakeup	1
+../Core/Src/DRV8825.c:50:6:DRV_microstep_config	7
+../Core/Src/DRV8825.c:88:6:DRV_start	1
+../Core/Src/DRV8825.c:101:6:DRV_move_steps	3
+../Core/Src/DRV8825.c:121:6:DRV_read_batt	1
+../Core/Src/DRV8825.c:126:6:DRV_move_angle_abs	3
+../Core/Src/DRV8825.c:140:6:DRV_retract_full	1
+../Core/Src/DRV8825.c:145:6:DRV_extend_full	1
