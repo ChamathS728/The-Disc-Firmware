@@ -58,31 +58,37 @@ void DRV_microstep_config(stepperHandle_t* sHandlePtr, eMicrostepMode microstepS
 			HAL_GPIO_WritePin(sHandlePtr->IO->M2Port, sHandlePtr->IO->M2Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M1Port, sHandlePtr->IO->M1Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M0Port, sHandlePtr->IO->M0Pin, GPIO_PIN_RESET);
+			break;
 		case MICROSTEP_2:
 			// 001
 			HAL_GPIO_WritePin(sHandlePtr->IO->M2Port, sHandlePtr->IO->M2Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M1Port, sHandlePtr->IO->M1Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M0Port, sHandlePtr->IO->M0Pin, GPIO_PIN_SET);
+			break;
 		case MICROSTEP_4:
 			// 010
 			HAL_GPIO_WritePin(sHandlePtr->IO->M2Port, sHandlePtr->IO->M2Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M1Port, sHandlePtr->IO->M1Pin, GPIO_PIN_SET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M0Port, sHandlePtr->IO->M0Pin, GPIO_PIN_RESET);
+			break;
 		case MICROSTEP_8:
 			// 011
 			HAL_GPIO_WritePin(sHandlePtr->IO->M2Port, sHandlePtr->IO->M2Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M1Port, sHandlePtr->IO->M1Pin, GPIO_PIN_SET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M0Port, sHandlePtr->IO->M0Pin, GPIO_PIN_SET);
+			break;
 		case MICROSTEP_16:
 			// 100
 			HAL_GPIO_WritePin(sHandlePtr->IO->M2Port, sHandlePtr->IO->M2Pin, GPIO_PIN_SET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M1Port, sHandlePtr->IO->M1Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M0Port, sHandlePtr->IO->M0Pin, GPIO_PIN_RESET);
+			break;
 		case MICROSTEP_32:
 			// 101, 110, 111
 			HAL_GPIO_WritePin(sHandlePtr->IO->M2Port, sHandlePtr->IO->M2Pin, GPIO_PIN_SET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M1Port, sHandlePtr->IO->M1Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M0Port, sHandlePtr->IO->M0Pin, GPIO_PIN_SET);
+			break;
 //		default:
 //			__NOP();
 	}
@@ -123,21 +129,28 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 		case 0:
 			HAL_GPIO_WritePin(sHandlePtr->IO->dirPort, sHandlePtr->IO->dirPin, GPIO_PIN_RESET);
 			sHandlePtr->cfg->stepperDir = 0;
+			break;
 		case 1:
 			HAL_GPIO_WritePin(sHandlePtr->IO->dirPort, sHandlePtr->IO->dirPin, GPIO_PIN_SET);
 			sHandlePtr->cfg->stepperDir = 1;
+			break;
 //		default:
 //			__NOP();
 	}
 
+	// Start PWM timer, it should be stopped in PeriodElapsedCallback in main.c
+	HAL_StatusTypeDef qwerty = HAL_TIM_PWM_Stop_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
+	qwerty = HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, TIM_CHANNEL_1);
+
 	// Configure ARR of PWMStopTimer to match steps
 	sHandlePtr->rotInfo->PWMStopPtr->Instance->ARR = steps-1;
 
-	// Start PWM timer, it should be stopped in PeriodElapsedCallback in main.c
-	HAL_StatusTypeDef qwerty = HAL_TIM_PWM_Stop_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
+
 	osDelay(1);
-	qwerty = HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
-	int asdf = 1 + 3;
+	qwerty = HAL_TIM_PWM_Start_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
+	qwerty = HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, TIM_CHANNEL_1);
+
+
 }
 //void DRV_read_batt(ADC_HandleTypeDef* hadc) {
 //

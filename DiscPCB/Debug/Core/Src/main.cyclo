@@ -16,5 +16,5 @@
 ../Core/Src/main.c:833:6:stepperCtrlFn	2
 ../Core/Src/main.c:903:6:stateMachineFn	1
 ../Core/Src/main.c:921:6:decodeUSBFn	1
-../Core/Src/main.c:941:6:HAL_TIM_PeriodElapsedCallback	2
-../Core/Src/main.c:958:6:Error_Handler	1
+../Core/Src/main.c:941:6:HAL_TIM_PeriodElapsedCallback	3
+../Core/Src/main.c:961:6:Error_Handler	1
