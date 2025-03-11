@@ -646,7 +646,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 65535;
+  htim4.Init.Period = 500;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -728,11 +728,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(BUZZER_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SPI1_CS_Pin MTR_NHOME_Pin MTR_NFLT_Pin */
-  GPIO_InitStruct.Pin = SPI1_CS_Pin|MTR_NHOME_Pin|MTR_NFLT_Pin;
+  /*Configure GPIO pins : SPI1_CS_Pin MTR_NHOME_Pin */
+  GPIO_InitStruct.Pin = SPI1_CS_Pin|MTR_NHOME_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : MTR_NFLT_Pin */
+  GPIO_InitStruct.Pin = MTR_NFLT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(MTR_NFLT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : MTR_NENBL_Pin SPI2_CS_Pin MTR_DIR_Pin MTR_M0_Pin
                            MTR_M1_Pin MTR_M2_Pin */
@@ -872,13 +878,17 @@ void stepperCtrlFn(void *argument)
 	};
 
 	stepperHandle_t* blah = DRV_init(&sCfg, &sIO, &sRot);
-
+	DRV_wakeup(blah);
+	DRV_start(blah);
   for(;;)
   {
 //	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-//	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-//	  DRV_move_steps(blah, 500, 0);
-    osDelay(1000);
+	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
+		  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+	  }
+
+	  DRV_move_steps(blah, 2000, 0);
+    osDelay(100);
   }
   /* USER CODE END stepperCtrlFn */
 }
@@ -935,10 +945,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM6) {
     HAL_IncTick();
-  }
-  else if (htim == PWMStopTimer) {
-		// Timer 3 finished PWM steps
-		HAL_TIM_PWM_Stop(&PWMStopTimer, TIM_CHANNEL_1);
   }
   /* USER CODE BEGIN Callback 1 */
 

@@ -6,32 +6,36 @@
  */
 #include "DRV8825.h"
 #include "math.h"
+#include "stdlib.h"
+#include "cmsis_os2.h"
 
 stepperHandle_t* DRV_init(stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr, stepperRotInfo_t* sRotPtr) {
 	// Create handle
-	stepperHandle_t sHandle = {
-		.IO = sIOPtr,
-		.cfg = sCfgPtr,
-		.rotInfo = sRotPtr
-	};
+	stepperHandle_t* sHandle = (stepperHandle_t*) malloc(sizeof(stepperHandle_t));
+
+	sHandle->IO = sIOPtr;
+	sHandle->cfg = sCfgPtr;
+	sHandle->rotInfo = sRotPtr;
 
 	// Pull sleep pin high to enable device
-	HAL_GPIO_WritePin(sHandle.IO->nSleepPort, sHandle.IO->nSleepPin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandle->IO->nSleepPort, sHandle->IO->nSleepPin, GPIO_PIN_SET);
 
 	// Reset indexer logic by pulling nReset high, then move it back
-	HAL_GPIO_WritePin(sHandle.IO->nResetPort, sHandle.IO->nResetPin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(sHandle.IO->nResetPort, sHandle.IO->nResetPin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(sHandle->IO->nResetPort, sHandle->IO->nResetPin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandle->IO->nResetPort, sHandle->IO->nResetPin, GPIO_PIN_RESET);
 
 	// Disable driver by pulling nEnable high
-	HAL_GPIO_WritePin(sHandle.IO->nEnablePort, sHandle.IO->nEnablePin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(sHandle->IO->nEnablePort, sHandle->IO->nEnablePin, GPIO_PIN_SET);
+	// Wait 1ms for DRV to stabilise
+	osDelay(1);
 
-	return &sHandle;
+	return sHandle;
 }
-void DRV_deinit(stepperHandle_t* sHandlePtr) {
-	//
-
-	__NOP();
-}
+//void DRV_deinit(stepperHandle_t* sHandlePtr) {
+//	//
+//
+//	__NOP();
+//}
 void DRV_sleep(stepperHandle_t* sHandlePtr) {
 	// Pull sleep pin low to sleep the device
 	HAL_GPIO_WritePin(sHandlePtr->IO->nSleepPort, sHandlePtr->IO->nSleepPin, GPIO_PIN_RESET);
@@ -79,8 +83,8 @@ void DRV_microstep_config(stepperHandle_t* sHandlePtr, eMicrostepMode microstepS
 			HAL_GPIO_WritePin(sHandlePtr->IO->M2Port, sHandlePtr->IO->M2Pin, GPIO_PIN_SET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M1Port, sHandlePtr->IO->M1Pin, GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(sHandlePtr->IO->M0Port, sHandlePtr->IO->M0Pin, GPIO_PIN_SET);
-		default:
-			_NOP();
+//		default:
+//			__NOP();
 	}
 }
 void DRV_movement_config(stepperHandle_t* sHandlePtr, eMovementProfile profile);
@@ -91,12 +95,27 @@ void DRV_start(stepperHandle_t* sHandlePtr) {
 	HAL_GPIO_WritePin(sHandlePtr->IO->nEnablePort, sHandlePtr->IO->nEnablePin, GPIO_PIN_RESET);
 
 	// Start Timers
-	HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->PWMStopPtr);
-	HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->encPtr);
 
-	HAL_TIM_Encoder_Start(sHandlePtr->rotInfo->encPtr, TIM_CHANNEL_ALL);
-	HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1); // Hardcoded channel
-	HAL_TIM_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, TIM_CHANNEL_1);
+	if (HAL_OK != HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->PWMStopPtr)) {
+		osDelay(100000);
+	}
+
+	if (HAL_OK != HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->encPtr)) {
+		osDelay(100000);
+	}
+
+	if (HAL_OK != HAL_TIM_Encoder_Start_IT(sHandlePtr->rotInfo->encPtr, TIM_CHANNEL_ALL)) {
+		osDelay(100000);
+	}
+
+	if (HAL_OK != HAL_TIM_PWM_Start_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1)) {
+		osDelay(100000);
+	}
+
+	if (HAL_OK != HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, TIM_CHANNEL_1)) {
+		osDelay(100000);
+	}
+
 }
 void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 	// Set direction
@@ -107,22 +126,22 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 		case 1:
 			HAL_GPIO_WritePin(sHandlePtr->IO->dirPort, sHandlePtr->IO->dirPin, GPIO_PIN_SET);
 			sHandlePtr->cfg->stepperDir = 1;
-		default:
-			__NOP();
+//		default:
+//			__NOP();
 	}
 
 	// Configure ARR of PWMStopTimer to match steps
-	sHandlePtr->rotInfo->PWMStopPtr->Instance->ARR = steps;
+	sHandlePtr->rotInfo->PWMStopPtr->Instance->ARR = steps-1;
 
 	// Start PWM timer, it should be stopped in PeriodElapsedCallback in main.c
-	HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
-
+	HAL_StatusTypeDef qwerty = HAL_TIM_PWM_Stop_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
+	osDelay(1);
+	qwerty = HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
+	int asdf = 1 + 3;
 }
-void DRV_read_batt(ADC_HandleTypeDef* hadc) {
-	//
-
-	__NOP();
-}
+//void DRV_read_batt(ADC_HandleTypeDef* hadc) {
+//
+//}
 void DRV_move_angle_abs(stepperHandle_t* sHandlePtr, float angle) {
 	/*
 	 * Moves stepper motor to an absolute angle, measured by the encoder
@@ -133,18 +152,12 @@ void DRV_move_angle_abs(stepperHandle_t* sHandlePtr, float angle) {
 	ang = (angle < sHandlePtr->rotInfo->maxAngle) ? ang : sHandlePtr->rotInfo->maxAngle;
 
 	// Get angle requirement: desired - actual
-	float angReq = ang - sHandlePtr->rotInfo->encPulses
-
-	__NOP();
+	float angReq = ang - sHandlePtr->rotInfo->encPulses;
 }
-void DRV_retract_full(void) {
-	//
-
-	__NOP();
-}
-void DRV_extend_full(void) {
-	//
-
-	__NOP();
-}
+//void DRV_retract_full(void) {
+//	//
+//}
+//void DRV_extend_full(void) {
+//	//
+//}
 
