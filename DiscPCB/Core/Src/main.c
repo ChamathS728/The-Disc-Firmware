@@ -886,9 +886,10 @@ void stepperCtrlFn(void *argument)
 	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
 		  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 	  }
-
-	  DRV_move_steps(blah, 100, 0);
-//    osDelay(1000);
+//	  taskENTER_CRITICAL();
+//	  DRV_move_steps(blah, 2000, 0);
+//	  taskEXIT_CRITICAL();
+    osDelay(1000);
   }
   /* USER CODE END stepperCtrlFn */
 }

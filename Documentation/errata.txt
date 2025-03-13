@@ -23,3 +23,7 @@ List of things that need to be changed for Disc V2
 - Move Strelka V2 SPI connector
     - Make it 90 deg (or 0 whatever) so that it is parallel to motor mount silkscreen
     - Push it closer-ish to motor mount and maybe add extra cutouts to make the board symmetrical
+- Make Motor mount holes 5.5mm!! (or whatever they currently are, plus 1mm)
+- Add extra battery connector next to pre-existing ones, along with schottky for selection
+    - SK54A-LTP from LCSC could work 
+- Add test points onto stuff like STEP, DIR, encoder lines, M2 M1 M0, 
