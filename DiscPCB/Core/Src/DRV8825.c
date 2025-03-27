@@ -106,6 +106,10 @@ void DRV_start(stepperHandle_t* sHandlePtr) {
 		osDelay(100000);
 	}
 
+	if (HAL_OK != HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->PWMPtr)) {
+		osDelay(100000);
+	}
+
 	if (HAL_OK != HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->encPtr)) {
 		osDelay(100000);
 	}

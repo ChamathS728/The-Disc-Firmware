@@ -3,5 +3,5 @@
 ../Core/Src/DRV8825.c:43:6:DRV_wakeup	16	static
 ../Core/Src/DRV8825.c:54:6:DRV_microstep_config	16	static
 ../Core/Src/DRV8825.c:98:6:DRV_start	16	static
-../Core/Src/DRV8825.c:126:6:DRV_move_steps	24	static
-../Core/Src/DRV8825.c:158:6:DRV_move_angle_abs	24	static
+../Core/Src/DRV8825.c:130:6:DRV_move_steps	24	static
+../Core/Src/DRV8825.c:162:6:DRV_move_angle_abs	24	static

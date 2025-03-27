@@ -248,7 +248,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
-
+  TIM3->CCR2 = 2000;
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -582,9 +582,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 512-1;
+  htim3.Init.Prescaler = 9-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 7;
+  htim3.Init.Period = 3999;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -615,6 +615,11 @@ static void MX_TIM3_Init(void)
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.Pulse = 0;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -708,11 +713,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, ERROR_LED_Pin|DEBUG_LED_Pin|MTR_DECAY_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, BUZZER_Pin|MTR_NRST_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, MTR_NENBL_Pin|MTR_NSLP_Pin|SPI2_CS_Pin|MTR_DIR_Pin
                           |MTR_M0_Pin|MTR_M1_Pin|MTR_M2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(MTR_NRST_GPIO_Port, MTR_NRST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : ERROR_LED_Pin DEBUG_LED_Pin MTR_DECAY_Pin */
   GPIO_InitStruct.Pin = ERROR_LED_Pin|DEBUG_LED_Pin|MTR_DECAY_Pin;
@@ -720,13 +725,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : BUZZER_Pin */
-  GPIO_InitStruct.Pin = BUZZER_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(BUZZER_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SPI1_CS_Pin MTR_NHOME_Pin */
   GPIO_InitStruct.Pin = SPI1_CS_Pin|MTR_NHOME_Pin;
@@ -883,9 +881,11 @@ void stepperCtrlFn(void *argument)
   for(;;)
   {
 //	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
-		  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-	  }
+//	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
+//		  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+//	  }
+	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 //	  taskENTER_CRITICAL();
 //	  DRV_move_steps(blah, 2000, 0);
 //	  taskEXIT_CRITICAL();
@@ -904,6 +904,19 @@ void stepperCtrlFn(void *argument)
 void stateMachineFn(void *argument)
 {
   /* USER CODE BEGIN stateMachineFn */
+	// Set PWM duty cycle for buzzer to 50%
+//	TIM3->CCR2 = (int) TIM3->ARR/2;
+//	TIM3->CCR2 = 2000;
+
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (int) TIM3->ARR/2);
+	__NOP();
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+//	TIM3->CCR2 = 2000;
+
+	osDelay(30000);
+
+	HAL_TIM_PWM_Stop(PWMTimer, TIM_CHANNEL_2);
+
   /* Infinite loop */
   for(;;)
   {
