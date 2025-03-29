@@ -36,6 +36,11 @@
 /* USER CODE BEGIN PD */
 #define COMMAND_OVER_USB 1	// Uncomment if we want to receive data from USB
 
+
+#define USE_BUZZER 1		// Uncomment if we don't want the buzzer to sound
+#define BUZZ_ARR 4000
+#define BUZZ_PSC 9
+#define BUZZ_CHANNEL TIM_CHANNEL_2
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -67,21 +72,21 @@ const osThreadAttr_t strelkaCommsTas_attributes = {
 osThreadId_t powerSenseTaskHandle;
 const osThreadAttr_t powerSenseTask_attributes = {
   .name = "powerSenseTask",
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
 /* Definitions for stepperCtrlTask */
 osThreadId_t stepperCtrlTaskHandle;
 const osThreadAttr_t stepperCtrlTask_attributes = {
   .name = "stepperCtrlTask",
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
 /* Definitions for stateMachineTas */
 osThreadId_t stateMachineTasHandle;
 const osThreadAttr_t stateMachineTas_attributes = {
   .name = "stateMachineTas",
-  .priority = (osPriority_t) osPriorityHigh,
+  .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
 /* Definitions for decodeUSBTask */
@@ -107,7 +112,7 @@ const osMessageQueueAttr_t motorData_attributes = {
   .name = "motorData"
 };
 /* USER CODE BEGIN PV */
-
+uint8_t isADCDone = 0;		// Flag for when ADC conversion done and processed
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -153,6 +158,11 @@ void USB_CDC_RxHandler(uint8_t* Buf, uint32_t Len)
 	#endif
 }
 
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+	// Once the ADC has been read, set flag
+	isADCDone = 1;
+}
 
 /* USER CODE END 0 */
 
@@ -194,7 +204,7 @@ int main(void)
   MX_CORDIC_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  
+
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -248,7 +258,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
-  TIM3->CCR2 = 2000;
+
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -379,6 +389,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
+  sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -387,6 +398,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
+  sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -395,6 +407,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
+  sConfig.Channel = ADC_CHANNEL_4;
   sConfig.Rank = ADC_REGULAR_RANK_4;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -600,10 +613,6 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_OnePulse_Init(&htim3, TIM_OPMODE_SINGLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
@@ -804,15 +813,33 @@ void strelkaCommsFn(void *argument)
 void powerSenseFn(void *argument)
 {
   /* USER CODE BEGIN powerSenseFn */
-	// Initialise buffers
+	// Initialise variables
+	uint32_t buffADC[4];
+	uint32_t mtr_A_I = 0;
+	uint32_t mtr_B_I = 0;
+	uint32_t batt_V = 0;
+	uint32_t batt_I = 0;
 
 	// Start up ADCs
-
+	HAL_ADC_Start_DMA(&hadc1, buffADC, sizeof(buffADC)/sizeof(uint32_t));
 
   /* Infinite loop */
   for(;;)
   {
-	  // Get data from ADCs over DMA??
+	  // Get data from ADCs over DMA
+	  if (isADCDone == 1) {
+		  // Process each reading from buffADC
+		  buffADC[0] = mtr_A_I;
+		  buffADC[1] = mtr_B_I;
+		  buffADC[2] = batt_V;
+		  buffADC[3] = batt_I;
+
+		  // Reset flag
+		  isADCDone = 0;
+
+		  // Restart ADC
+		  HAL_ADC_Start_DMA(&hadc1, buffADC, sizeof(buffADC)/sizeof(uint32_t));
+	  }
 
 	  // Convert data from each channel to actual units
 
@@ -878,18 +905,19 @@ void stepperCtrlFn(void *argument)
 	stepperHandle_t* blah = DRV_init(&sCfg, &sIO, &sRot);
 	DRV_wakeup(blah);
 	DRV_start(blah);
+
   for(;;)
   {
 //	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 //	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
 //		  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 //	  }
-	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+//	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+//	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 //	  taskENTER_CRITICAL();
 //	  DRV_move_steps(blah, 2000, 0);
 //	  taskEXIT_CRITICAL();
-    osDelay(1000);
+//    osDelay(1000);
   }
   /* USER CODE END stepperCtrlFn */
 }
@@ -908,14 +936,23 @@ void stateMachineFn(void *argument)
 //	TIM3->CCR2 = (int) TIM3->ARR/2;
 //	TIM3->CCR2 = 2000;
 
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, (int) TIM3->ARR/2);
-	__NOP();
-	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-//	TIM3->CCR2 = 2000;
-
-	osDelay(30000);
-
-	HAL_TIM_PWM_Stop(PWMTimer, TIM_CHANNEL_2);
+// Buzzer only sounds when state machine task entered initially
+#ifdef USE_BUZZER
+	__HAL_TIM_SET_AUTORELOAD(PWMTimer, BUZZ_ARR-1);
+	__HAL_TIM_SET_PRESCALER(PWMTimer, BUZZ_PSC-1);
+	__HAL_TIM_SET_COMPARE(PWMTimer, BUZZ_CHANNEL, ((int) PWMTimer->Instance->ARR)/2);
+	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+#endif
 
   /* Infinite loop */
   for(;;)
@@ -979,6 +1016,10 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+	  // Flash error LED
+	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
+	  osDelay(500);
+
   }
   /* USER CODE END Error_Handler_Debug */
 }

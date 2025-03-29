@@ -9,6 +9,8 @@
 #include "stdlib.h"
 #include "cmsis_os2.h"
 
+
+
 stepperHandle_t* DRV_init(stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr, stepperRotInfo_t* sRotPtr) {
 	// Create handle
 	stepperHandle_t* sHandle = (stepperHandle_t*) malloc(sizeof(stepperHandle_t));
@@ -118,11 +120,11 @@ void DRV_start(stepperHandle_t* sHandlePtr) {
 		osDelay(100000);
 	}
 
-	if (HAL_OK != HAL_TIM_PWM_Start_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1)) {
+	if (HAL_OK != HAL_TIM_PWM_Start_IT(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL)) {
 		osDelay(100000);
 	}
 
-	if (HAL_OK != HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, TIM_CHANNEL_1)) {
+	if (HAL_OK != HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL)) {
 		osDelay(100000);
 	}
 
@@ -143,16 +145,16 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 	}
 
 	// Start PWM timer, it should be stopped in PeriodElapsedCallback in main.c
-	HAL_StatusTypeDef qwerty = HAL_TIM_PWM_Stop_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
-	qwerty = HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, TIM_CHANNEL_1);
+	HAL_StatusTypeDef qwerty = HAL_TIM_PWM_Stop_IT(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
+	qwerty = HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
 
 	// Configure ARR of PWMStopTimer to match steps
 	sHandlePtr->rotInfo->PWMStopPtr->Instance->ARR = steps-1;
 
 
 	osDelay(1);
-	qwerty = HAL_TIM_PWM_Start_IT(sHandlePtr->rotInfo->PWMPtr, TIM_CHANNEL_1);
-	qwerty = HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, TIM_CHANNEL_1);
+	qwerty = HAL_TIM_PWM_Start_IT(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
+	qwerty = HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
 
 
 }
