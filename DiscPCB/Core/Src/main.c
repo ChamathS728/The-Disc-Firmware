@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "DRV8825.h"
 #include "discStateMachine.h"
+#include "stdio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,7 +39,7 @@
 
 
 #define USE_BUZZER 1		// Uncomment if we don't want the buzzer to sound
-#define BUZZ_ARR 4000
+#define BUZZ_ARR 40000
 #define BUZZ_PSC 9
 #define BUZZ_CHANNEL TIM_CHANNEL_2
 /* USER CODE END PD */
@@ -143,10 +144,18 @@ TIM_HandleTypeDef* PWMStopTimer = &htim4;
 TIM_HandleTypeDef* EncoderTimer = &htim1;
 
 // Overwrite _write method to use printf for sending to computer
-int _write(int file, char *ptr, int len) {
-    CDC_Transmit_FS((uint8_t*) ptr, len); return len;
-}
+int _write(int file, char *ptr, int len)
+{
+  (void)file;
+  int DataIdx;
 
+  for (DataIdx = 0; DataIdx < len; DataIdx++)
+  {
+    //__io_putchar(*ptr++);
+	  ITM_SendChar(*ptr++);
+  }
+  return len;
+}
 // Define RxHandler to receive data over USB
 void USB_CDC_RxHandler(uint8_t* Buf, uint32_t Len)
 {
@@ -354,7 +363,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 4;
+  hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -376,7 +385,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -389,26 +398,8 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_2;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_3;
-  sConfig.Rank = ADC_REGULAR_RANK_3;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Regular Channel
-  */
   sConfig.Channel = ADC_CHANNEL_4;
-  sConfig.Rank = ADC_REGULAR_RANK_4;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -699,6 +690,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* DMAMUX_OVR_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMAMUX_OVR_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMAMUX_OVR_IRQn);
 
 }
 
@@ -814,13 +808,14 @@ void powerSenseFn(void *argument)
 {
   /* USER CODE BEGIN powerSenseFn */
 	// Initialise variables
-	uint32_t buffADC[4];
+	uint32_t buffADC[2] = {0,0};
 	uint32_t mtr_A_I = 0;
 	uint32_t mtr_B_I = 0;
 	uint32_t batt_V = 0;
 	uint32_t batt_I = 0;
 
 	// Start up ADCs
+	HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
 	HAL_ADC_Start_DMA(&hadc1, buffADC, sizeof(buffADC)/sizeof(uint32_t));
 
   /* Infinite loop */
@@ -829,10 +824,20 @@ void powerSenseFn(void *argument)
 	  // Get data from ADCs over DMA
 	  if (isADCDone == 1) {
 		  // Process each reading from buffADC
-		  buffADC[0] = mtr_A_I;
-		  buffADC[1] = mtr_B_I;
-		  buffADC[2] = batt_V;
-		  buffADC[3] = batt_I;
+//		  buffADC[0] = mtr_A_I;
+//		  buffADC[1] = mtr_B_I;
+//		  buffADC[2] = batt_V;
+//		  buffADC[3] = batt_I;
+
+//		  mtr_A_I = buffADC[0];
+//		  mtr_B_I = buffADC[1];
+//		  batt_V = buffADC[2];
+//		  batt_I = buffADC[3];
+
+		  char blah[64];
+//		  sprintf(blah, "%d,%d,%d,%d\n", mtr_A_I, mtr_B_I, batt_V, batt_I);
+		  sprintf(blah, "%d,%d\n", buffADC[0], buffADC[1]);
+		  printf(blah);
 
 		  // Reset flag
 		  isADCDone = 0;
@@ -941,6 +946,8 @@ void stateMachineFn(void *argument)
 	__HAL_TIM_SET_AUTORELOAD(PWMTimer, BUZZ_ARR-1);
 	__HAL_TIM_SET_PRESCALER(PWMTimer, BUZZ_PSC-1);
 	__HAL_TIM_SET_COMPARE(PWMTimer, BUZZ_CHANNEL, ((int) PWMTimer->Instance->ARR)/2);
+
+//	taskENTER_CRITICAL();
 	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
 	osDelay(100);
 	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
@@ -952,6 +959,7 @@ void stateMachineFn(void *argument)
 	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
 	osDelay(100);
 	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+//	taskEXIT_CRITICAL();
 #endif
 
   /* Infinite loop */
