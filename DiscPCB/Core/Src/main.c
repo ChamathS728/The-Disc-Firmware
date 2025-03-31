@@ -360,10 +360,10 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.GainCompensation = 0;
   hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 2;
+  hadc1.Init.NbrOfConversion = 4;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -385,7 +385,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -398,8 +398,26 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_REGULAR_RANK_4;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -611,7 +629,7 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 4;
+  sConfigOC.Pulse = 2000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -651,7 +669,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 5000;
+  htim4.Init.Period = 8;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -690,9 +708,6 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMAMUX_OVR_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMAMUX_OVR_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMAMUX_OVR_IRQn);
 
 }
 
@@ -808,7 +823,7 @@ void powerSenseFn(void *argument)
 {
   /* USER CODE BEGIN powerSenseFn */
 	// Initialise variables
-	uint32_t buffADC[2] = {0,0};
+	uint16_t buffADC[4] = {0,0,0,0};
 	uint32_t mtr_A_I = 0;
 	uint32_t mtr_B_I = 0;
 	uint32_t batt_V = 0;
@@ -816,34 +831,24 @@ void powerSenseFn(void *argument)
 
 	// Start up ADCs
 	HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-	HAL_ADC_Start_DMA(&hadc1, buffADC, sizeof(buffADC)/sizeof(uint32_t));
+	HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 
   /* Infinite loop */
   for(;;)
   {
 	  // Get data from ADCs over DMA
 	  if (isADCDone == 1) {
-		  // Process each reading from buffADC
-//		  buffADC[0] = mtr_A_I;
-//		  buffADC[1] = mtr_B_I;
-//		  buffADC[2] = batt_V;
-//		  buffADC[3] = batt_I;
-
-//		  mtr_A_I = buffADC[0];
-//		  mtr_B_I = buffADC[1];
-//		  batt_V = buffADC[2];
-//		  batt_I = buffADC[3];
 
 		  char blah[64];
 //		  sprintf(blah, "%d,%d,%d,%d\n", mtr_A_I, mtr_B_I, batt_V, batt_I);
-		  sprintf(blah, "%d,%d\n", buffADC[0], buffADC[1]);
+		  sprintf(blah, "%d,%d,%d,%d\n",buffADC[0],buffADC[1],buffADC[2],buffADC[3]);
 		  printf(blah);
 
 		  // Reset flag
 		  isADCDone = 0;
 
 		  // Restart ADC
-		  HAL_ADC_Start_DMA(&hadc1, buffADC, sizeof(buffADC)/sizeof(uint32_t));
+		  HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 	  }
 
 	  // Convert data from each channel to actual units
@@ -898,7 +903,7 @@ void stepperCtrlFn(void *argument)
 	stepperRotInfo_t sRot = {
 			.PWMPtr 		= PWMTimer,
 			.PWMStopPtr 	= PWMStopTimer,
-			.driveRes 		= REV_1,
+			.driveRes 		= REV_2,
 			.driverSteps 	= 0,
 			.encPPR 		= 1000,
 			.encPtr 		= EncoderTimer,
@@ -909,7 +914,11 @@ void stepperCtrlFn(void *argument)
 
 	stepperHandle_t* blah = DRV_init(&sCfg, &sIO, &sRot);
 	DRV_wakeup(blah);
+	DRV_microstep_config(blah, MICROSTEP_2);
 	DRV_start(blah);
+	DRV_move_steps(blah, 50, 1);
+	DRV_move_steps(blah, 100, 0);
+	DRV_sleep(blah);
 
   for(;;)
   {
@@ -919,9 +928,10 @@ void stepperCtrlFn(void *argument)
 //	  }
 //	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 //	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-//	  taskENTER_CRITICAL();
-//	  DRV_move_steps(blah, 2000, 0);
-//	  taskEXIT_CRITICAL();
+//	  vTaskSuspendAll();
+//	  DRV_move_steps(blah, 0, 0);
+//	  xTaskResumeAll();
+
 //    osDelay(1000);
   }
   /* USER CODE END stepperCtrlFn */
@@ -1006,9 +1016,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-  if (htim->Instance == TIM4) {
+  if (htim == &htim4) {
 		// Stop PWM from timer 1
-		HAL_TIM_PWM_Stop(PWMStopTimer, TIM_CHANNEL_1);
+		HAL_TIM_PWM_Stop(PWMTimer, TIM_CHANNEL_1);
+
+		// FIMXE: Sleep the driver for now
+//		HAL_GPIO_WritePin(MTR_NSLP_GPIO_Port, MTR_NSLP_Pin, GPIO_PIN_RESET);
   }
   /* USER CODE END Callback 1 */
 }
