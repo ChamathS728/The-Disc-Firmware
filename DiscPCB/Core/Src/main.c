@@ -903,7 +903,7 @@ void stepperCtrlFn(void *argument)
 	stepperRotInfo_t sRot = {
 			.PWMPtr 		= PWMTimer,
 			.PWMStopPtr 	= PWMStopTimer,
-			.driveRes 		= REV_2,
+			.driveRes 		= REV_1,
 			.driverSteps 	= 0,
 			.encPPR 		= 1000,
 			.encPtr 		= EncoderTimer,
@@ -914,10 +914,12 @@ void stepperCtrlFn(void *argument)
 
 	stepperHandle_t* blah = DRV_init(&sCfg, &sIO, &sRot);
 	DRV_wakeup(blah);
-	DRV_microstep_config(blah, MICROSTEP_2);
+//	DRV_microstep_config(blah, MICROSTEP_2);
 	DRV_start(blah);
-	DRV_move_steps(blah, 50, 1);
+	DRV_move_steps(blah, 200, 1); // 1 means anticlockwise as of 31/01/25
+	osDelay(1000);
 	DRV_move_steps(blah, 100, 0);
+	osDelay(1000);
 	DRV_sleep(blah);
 
   for(;;)
@@ -958,17 +960,17 @@ void stateMachineFn(void *argument)
 	__HAL_TIM_SET_COMPARE(PWMTimer, BUZZ_CHANNEL, ((int) PWMTimer->Instance->ARR)/2);
 
 //	taskENTER_CRITICAL();
-	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
-	osDelay(100);
-	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
-	osDelay(100);
-	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
-	osDelay(100);
-	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
-	osDelay(100);
-	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
-	osDelay(100);
-	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+//	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+//	osDelay(100);
+//	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+//	osDelay(100);
+//	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+//	osDelay(100);
+//	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+//	osDelay(100);
+//	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+//	osDelay(100);
+//	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
 //	taskEXIT_CRITICAL();
 #endif
 
