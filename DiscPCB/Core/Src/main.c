@@ -554,19 +554,19 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1000;
+  htim1.Init.Period = 65535;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 0;
+  sConfig.IC1Filter = 15;
   sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
+  sConfig.IC2Filter = 10;
   if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -841,8 +841,8 @@ void powerSenseFn(void *argument)
 
 		  char blah[64];
 //		  sprintf(blah, "%d,%d,%d,%d\n", mtr_A_I, mtr_B_I, batt_V, batt_I);
-		  sprintf(blah, "%d,%d,%d,%d\n",buffADC[0],buffADC[1],buffADC[2],buffADC[3]);
-		  printf(blah);
+//		  sprintf(blah, "%d,%d,%d,%d\n",buffADC[0],buffADC[1],buffADC[2],buffADC[3]);
+//		  printf(blah);
 
 		  // Reset flag
 		  isADCDone = 0;
@@ -914,13 +914,14 @@ void stepperCtrlFn(void *argument)
 
 	stepperHandle_t* blah = DRV_init(&sCfg, &sIO, &sRot);
 	DRV_wakeup(blah);
-//	DRV_microstep_config(blah, MICROSTEP_2);
 	DRV_start(blah);
-	DRV_move_steps(blah, 200, 1); // 1 means anticlockwise as of 31/01/25
-	osDelay(1000);
-	DRV_move_steps(blah, 100, 0);
-	osDelay(1000);
+//	DRV_move_steps(blah, 200, 1); // 1 means anticlockwise as of 31/01/25
+//	osDelay(1000);
+//	DRV_move_steps(blah, 100, 0);
+//	osDelay(1000);
 	DRV_sleep(blah);
+
+
 
   for(;;)
   {
@@ -933,8 +934,11 @@ void stepperCtrlFn(void *argument)
 //	  vTaskSuspendAll();
 //	  DRV_move_steps(blah, 0, 0);
 //	  xTaskResumeAll();
-
-//    osDelay(1000);
+	  uint32_t encoderVal = blah->rotInfo->encPtr->Instance->CNT;
+	  char buff[64];
+	  sprintf(buff, "%d\n",encoderVal);
+	  printf(buff);
+    osDelay(200);
   }
   /* USER CODE END stepperCtrlFn */
 }

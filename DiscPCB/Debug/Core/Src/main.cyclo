@@ -16,7 +16,7 @@
 ../Core/Src/main.c:797:6:strelkaCommsFn	1
 ../Core/Src/main.c:822:6:powerSenseFn	2
 ../Core/Src/main.c:868:6:stepperCtrlFn	1
-../Core/Src/main.c:949:6:stateMachineFn	1
-../Core/Src/main.c:992:6:decodeUSBFn	1
-../Core/Src/main.c:1012:6:HAL_TIM_PeriodElapsedCallback	3
-../Core/Src/main.c:1035:6:Error_Handler	1
+../Core/Src/main.c:953:6:stateMachineFn	1
+../Core/Src/main.c:996:6:decodeUSBFn	1
+../Core/Src/main.c:1016:6:HAL_TIM_PeriodElapsedCallback	3
+../Core/Src/main.c:1039:6:Error_Handler	1
