@@ -61,7 +61,6 @@ SPI_HandleTypeDef hspi2;
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
-TIM_HandleTypeDef htim8;
 
 /* Definitions for strelkaCommsTas */
 osThreadId_t strelkaCommsTasHandle;
@@ -128,7 +127,6 @@ static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_CORDIC_Init(void);
 static void MX_TIM4_Init(void);
-static void MX_TIM8_Init(void);
 void strelkaCommsFn(void *argument);
 void powerSenseFn(void *argument);
 void stepperCtrlFn(void *argument);
@@ -144,6 +142,11 @@ void decodeUSBFn(void *argument);
 TIM_HandleTypeDef* PWMTimer = &htim3;
 TIM_HandleTypeDef* PWMStopTimer = &htim4;
 TIM_HandleTypeDef* EncoderTimer = &htim1;
+SPI_HandleTypeDef* StrelkaV2SPI = &hspi2;
+
+// Initialise buffers
+uint8_t txBuff[3] = {'a', 'b', '\n'};
+uint8_t rxBuff[3];
 
 // Overwrite _write method to use printf for sending to computer
 int _write(int file, char *ptr, int len)
@@ -173,6 +176,11 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	// Once the ADC has been read, set flag
 	isADCDone = 1;
+}
+
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
+	printf(rxBuff);
+	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 }
 
 /* USER CODE END 0 */
@@ -214,7 +222,6 @@ int main(void)
   MX_TIM3_Init();
   MX_CORDIC_Init();
   MX_TIM4_Init();
-  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -513,19 +520,18 @@ static void MX_SPI2_Init(void)
   /* USER CODE END SPI2_Init 1 */
   /* SPI2 parameter configuration*/
   hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_MASTER;
+  hspi2.Init.Mode = SPI_MODE_SLAVE;
   hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi2.Init.DataSize = SPI_DATASIZE_16BIT;
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi2.Init.NSS = SPI_NSS_HARD_INPUT;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi2.Init.CRCPolynomial = 7;
   hspi2.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi2.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  hspi2.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
   if (HAL_SPI_Init(&hspi2) != HAL_OK)
   {
     Error_Handler();
@@ -574,7 +580,7 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_ENCODER_CLK;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
@@ -698,54 +704,6 @@ static void MX_TIM4_Init(void)
 }
 
 /**
-  * @brief TIM8 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM8_Init(void)
-{
-
-  /* USER CODE BEGIN TIM8_Init 0 */
-
-  /* USER CODE END TIM8_Init 0 */
-
-  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM8_Init 1 */
-
-  /* USER CODE END TIM8_Init 1 */
-  htim8.Instance = TIM8;
-  htim8.Init.Prescaler = 0;
-  htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim8.Init.Period = 65535;
-  htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim8.Init.RepetitionCounter = 0;
-  htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;
-  sSlaveConfig.InputTrigger = TIM_TS_ITR0;
-  if (HAL_TIM_SlaveConfigSynchro(&htim8, &sSlaveConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim8, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM8_Init 2 */
-
-  /* USER CODE END TIM8_Init 2 */
-
-}
-
-/**
   * Enable DMA controller clock
   */
 static void MX_DMA_Init(void)
@@ -782,8 +740,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, ERROR_LED_Pin|DEBUG_LED_Pin|MTR_DECAY_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, MTR_NENBL_Pin|MTR_NSLP_Pin|SPI2_CS_Pin|MTR_DIR_Pin
-                          |MTR_M0_Pin|MTR_M1_Pin|MTR_M2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, MTR_NENBL_Pin|MTR_NSLP_Pin|MTR_DIR_Pin|MTR_M0_Pin
+                          |MTR_M1_Pin|MTR_M2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(MTR_NRST_GPIO_Port, MTR_NRST_Pin, GPIO_PIN_RESET);
@@ -807,10 +765,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(MTR_NFLT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : MTR_NENBL_Pin SPI2_CS_Pin MTR_DIR_Pin MTR_M0_Pin
-                           MTR_M1_Pin MTR_M2_Pin */
-  GPIO_InitStruct.Pin = MTR_NENBL_Pin|SPI2_CS_Pin|MTR_DIR_Pin|MTR_M0_Pin
-                          |MTR_M1_Pin|MTR_M2_Pin;
+  /*Configure GPIO pins : MTR_NENBL_Pin MTR_DIR_Pin MTR_M0_Pin MTR_M1_Pin
+                           MTR_M2_Pin */
+  GPIO_InitStruct.Pin = MTR_NENBL_Pin|MTR_DIR_Pin|MTR_M0_Pin|MTR_M1_Pin
+                          |MTR_M2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -852,13 +810,17 @@ void strelkaCommsFn(void *argument)
   /* USER CODE BEGIN 5 */
 
   // Initialise buffers
+//  uint8_t txBuff[3] = {"a", "b", "\n"};
+//  uint8_t rxBuff[3];
 
-  // Start SPI comms
+  // Send initial message
+  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
 
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
+    osDelay(10);
   }
   /* USER CODE END 5 */
 }
@@ -985,10 +947,10 @@ void stepperCtrlFn(void *argument)
 //	  vTaskSuspendAll();
 //	  DRV_move_steps(blah, 0, 0);
 //	  xTaskResumeAll();
-	  uint32_t encoderVal = blah->rotInfo->encPtr->Instance->CNT;
-	  char buff[64];
-	  sprintf(buff, "%d\n",encoderVal);
-	  printf(buff);
+//	  uint32_t encoderVal = blah->rotInfo->encPtr->Instance->CNT;
+//	  char buff[64];
+//	  sprintf(buff, "%ld\n",encoderVal);
+//	  printf(buff);
     osDelay(200);
   }
   /* USER CODE END stepperCtrlFn */
