@@ -87,6 +87,7 @@ void Error_Handler(void);
 #define MTR_NSLP_GPIO_Port GPIOB
 #define SPI2_CS_Pin GPIO_PIN_12
 #define SPI2_CS_GPIO_Port GPIOB
+#define SPI2_CS_EXTI_IRQn EXTI15_10_IRQn
 #define MTR_ENCA_Pin GPIO_PIN_8
 #define MTR_ENCA_GPIO_Port GPIOA
 #define MTR_ENCB_Pin GPIO_PIN_9

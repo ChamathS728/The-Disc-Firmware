@@ -145,7 +145,7 @@ TIM_HandleTypeDef* EncoderTimer = &htim1;
 SPI_HandleTypeDef* StrelkaV2SPI = &hspi2;
 
 // Initialise buffers
-uint8_t txBuff[3] = {'a', 'b', '\n'};
+uint8_t txBuff[3] = {'x', 'y', 'z'};
 uint8_t rxBuff[3];
 
 // Overwrite _write method to use printf for sending to computer
@@ -178,9 +178,15 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 	isADCDone = 1;
 }
 
-void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 	printf(rxBuff);
 	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	if (GPIO_Pin == SPI2_CS_Pin) {
+		HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, sizeof(txBuff));
+	}
 }
 
 /* USER CODE END 0 */
@@ -525,7 +531,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.DataSize = SPI_DATASIZE_16BIT;
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_HARD_INPUT;
+  hspi2.Init.NSS = SPI_NSS_SOFT;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -781,12 +787,22 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(MTR_NSLP_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : SPI2_CS_Pin */
+  GPIO_InitStruct.Pin = SPI2_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(SPI2_CS_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : MTR_NRST_Pin */
   GPIO_InitStruct.Pin = MTR_NRST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(MTR_NRST_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -814,13 +830,14 @@ void strelkaCommsFn(void *argument)
 //  uint8_t rxBuff[3];
 
   // Send initial message
+//  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
   HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
 
   /* Infinite loop */
   for(;;)
   {
-	  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
-    osDelay(10);
+//	  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
+    osDelay(100);
   }
   /* USER CODE END 5 */
 }
