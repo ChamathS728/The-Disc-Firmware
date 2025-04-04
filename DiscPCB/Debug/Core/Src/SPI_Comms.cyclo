@@ -1,0 +1,3 @@
+../Core/Src/SPI_Comms.c:10:6:decodeMovePacket	1
+../Core/Src/SPI_Comms.c:22:6:encodeRetractPacket	1
+../Core/Src/SPI_Comms.c:26:6:encodeExtendPacket	1

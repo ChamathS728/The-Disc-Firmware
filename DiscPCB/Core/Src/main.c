@@ -26,6 +26,8 @@
 #include "DRV8825.h"
 #include "discStateMachine.h"
 #include "stdio.h"
+#include "threadFlags.h"
+#include "SPI_Comms.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,7 +38,6 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define COMMAND_OVER_USB 1	// Uncomment if we want to receive data from USB
-
 
 #define USE_BUZZER 1		// Uncomment if we don't want the buzzer to sound
 #define BUZZ_ARR 40000
@@ -59,6 +60,7 @@ SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
@@ -113,7 +115,7 @@ const osMessageQueueAttr_t motorData_attributes = {
   .name = "motorData"
 };
 /* USER CODE BEGIN PV */
-uint8_t isADCDone = 0;		// Flag for when ADC conversion done and processed
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -127,6 +129,7 @@ static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_CORDIC_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_TIM2_Init(void);
 void strelkaCommsFn(void *argument);
 void powerSenseFn(void *argument);
 void stepperCtrlFn(void *argument);
@@ -134,14 +137,16 @@ void stateMachineFn(void *argument);
 void decodeUSBFn(void *argument);
 
 /* USER CODE BEGIN PFP */
-
+uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+TIM_HandleTypeDef* EncoderTimer = &htim1;
+TIM_HandleTypeDef* MillisTimer = &htim2;
 TIM_HandleTypeDef* PWMTimer = &htim3;
 TIM_HandleTypeDef* PWMStopTimer = &htim4;
-TIM_HandleTypeDef* EncoderTimer = &htim1;
+
 SPI_HandleTypeDef* StrelkaV2SPI = &hspi2;
 
 // Initialise buffers
@@ -174,8 +179,40 @@ void USB_CDC_RxHandler(uint8_t* Buf, uint32_t Len)
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-	// Once the ADC has been read, set flag
-	isADCDone = 1;
+	osThreadFlagsSet(powerSenseTaskHandle, isADCDone);
+}
+
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
+	// Pull header straight from receive buffer
+	PacketHeader_t* header = (PacketHeader_t*) hspi->pRxBuffPtr;
+
+	// Get packet type from struct and go through each possibility
+	switch (header->packetType) {
+		case PACKET_TYPE_MOVE:
+			// Decode move packet
+			decodeMovePacket();
+
+			// Notify stepper thread that target position has changed
+			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
+			break;
+		case PACKET_TYPE_RETRACT_FULL:
+			// FIXME - Overwrite target position
+
+			// Notify stepper thread that target position has changed
+			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
+			break;
+		case PACKET_TYPE_EXTEND_FULL:
+			// FIXME - Overwrite target position
+
+			// Notify stepper thread that target position has changed
+			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
+			break;
+		default:
+			break;
+	}
+
+	// Restart SPI comms
+	HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
 }
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
@@ -189,6 +226,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	}
 }
 
+uint32_t millis(void) {
+	return MillisTimer->Instance->CNT;
+}
 /* USER CODE END 0 */
 
 /**
@@ -228,6 +268,7 @@ int main(void)
   MX_TIM3_Init();
   MX_CORDIC_Init();
   MX_TIM4_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -600,6 +641,51 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -829,9 +915,11 @@ void strelkaCommsFn(void *argument)
 //  uint8_t txBuff[3] = {"a", "b", "\n"};
 //  uint8_t rxBuff[3];
 
+  // Start off receive with interrupts
+  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
+
   // Send initial message
-//  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
-  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
+  HAL_SPI_Transmit_IT(StrelkaV2SPI, txBuff, 3);
 
   /* Infinite loop */
   for(;;)
@@ -866,23 +954,18 @@ void powerSenseFn(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	  // Get data from ADCs over DMA
-	  if (isADCDone == 1) {
+	  // Task waits for ADC callback to run
+	  osThreadFlagsWait(isADCDone, osFlagsWaitAny, osWaitForever);
 
-		  char blah[64];
+	  char blah[64];
 //		  sprintf(blah, "%d,%d,%d,%d\n", mtr_A_I, mtr_B_I, batt_V, batt_I);
 //		  sprintf(blah, "%d,%d,%d,%d\n",buffADC[0],buffADC[1],buffADC[2],buffADC[3]);
 //		  printf(blah);
 
-		  // Reset flag
-		  isADCDone = 0;
-
-		  // Restart ADC
-		  HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
-	  }
+	  // Restart ADC
+	  HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 
 	  // Convert data from each channel to actual units
-
     osDelay(1);
   }
   /* USER CODE END powerSenseFn */
@@ -951,6 +1034,7 @@ void stepperCtrlFn(void *argument)
 //	osDelay(1000);
 	DRV_sleep(blah);
 
+	// Set up control loop parameters
 
 
   for(;;)
