@@ -7,7 +7,7 @@
 #include "SPI_Comms.h"
 
 /* Decode and encode methods */
-void decodeMovePacket(void) {
+uint16_t decodeMovePacket(void) {
 	// Used by Disc to work out target position
 	static PacketMove_t packet;
 	memcpy(&packet, rxDiscSPI, sizeof(packet));
@@ -17,8 +17,11 @@ void decodeMovePacket(void) {
 		return;
 	}
 
-	// TODO - Handle timestamp and position values
+	discStatus.targetPosition = packet.targetPosition;
+	discStatus.currentTime = packet.timestamp;
 
+	// TODO - Handle timestamp and position values
+	return packet.targetPosition;
 }
 
 
@@ -26,7 +29,7 @@ void decodeDeviceStatus(void);		// Used by Strelka to work out status of Disc
 void decodePower(void);				// Used by Strelka to work out Disc power consumption
 
 // Both used by Disc to create packets for Strelka
-void encodeDeviceStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp, uint32_t currentPosition, uint32_t targetPosition, uint8_t isMoving);
+void encodeDeviceStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp, uint16_t currentPosition, uint16_t targetPosition, uint8_t isMoving);
 void encodePower(PacketPower_t* packetPtr, uint32_t timestamp, uint32_t battV, uint32_t battI);
 
 // Both used by Strelka to create packets for Disc

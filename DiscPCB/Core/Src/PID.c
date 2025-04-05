@@ -6,7 +6,7 @@
  */
 #include "PID.h"
 
-void PID_Init(PID_Controller* pid,
+void PID_Init(PIDController_t* pid,
               float Kp, float Ki, float Kd, float dt,
               float output_min, float output_max,
               float alpha)
@@ -29,11 +29,8 @@ void PID_Init(PID_Controller* pid,
     pid->setpoint = 0.0f;
 }
 
-float PID_Update(PID_Controller* pid, float measured)
+float PID_Update(PIDController_t* pid, float error)
 {
-    // Compute error
-    float error = pid->setpoint - measured;
-
     // Proportional term
     float P = pid->Kp * error;
 

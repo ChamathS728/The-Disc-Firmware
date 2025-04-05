@@ -135,6 +135,7 @@ void DRV_sleep(stepperHandle_t* stepperHandlePtr);
 void DRV_wakeup(stepperHandle_t* stepperHandlePtr);
 void DRV_microstep_config(stepperHandle_t* stepperHandlePtr, eMicrostepMode microstepSetting);
 void DRV_movement_config(stepperHandle_t* stepperHandlePtr, eMovementProfile profile);
+void DRV_set_pulse_freq(stepperHandle_t* stepperHandlePtr, uint16_t pulseFreq);
 
 void DRV_start(stepperHandle_t* stepperHandlePtr);
 void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir);

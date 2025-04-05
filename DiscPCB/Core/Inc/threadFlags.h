@@ -14,6 +14,7 @@
 uint32_t isADCDone = 1;
 
 /* Stepper Control flags */
-uint32_t isTargetNew = 2;
+//uint32_t isTargetNew = 2;
+uint32_t buzzerDone = 3;
 
 #endif /* INC_THREADFLAGS_H_ */

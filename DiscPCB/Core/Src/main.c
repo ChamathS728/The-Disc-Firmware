@@ -28,6 +28,7 @@
 #include "stdio.h"
 #include "threadFlags.h"
 #include "SPI_Comms.h"
+#include "PID.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -37,7 +38,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define COMMAND_OVER_USB 1	// Uncomment if we want to receive data from USB
+//#define COMMAND_OVER_USB 1	// Uncomment if we want to receive data from USB
 
 #define USE_BUZZER 1		// Uncomment if we don't want the buzzer to sound
 #define BUZZ_ARR 40000
@@ -138,6 +139,7 @@ void decodeUSBFn(void *argument);
 
 /* USER CODE BEGIN PFP */
 uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
+uint8_t txDiscSPI[PACKET_SIZE_STRELKA_RX];
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -152,6 +154,16 @@ SPI_HandleTypeDef* StrelkaV2SPI = &hspi2;
 // Initialise buffers
 uint8_t txBuff[3] = {'x', 'y', 'z'};
 uint8_t rxBuff[3];
+
+DeviceStatus_t discStatus = {
+		.currentPosition = 0,
+		.currentTime = 0,
+		.targetPosition = 0,
+		.isMoving = 0
+};
+
+uint8_t isTargetNew = 1;
+int numOfRevolutions = 0;
 
 // Overwrite _write method to use printf for sending to computer
 int _write(int file, char *ptr, int len)
@@ -172,8 +184,6 @@ void USB_CDC_RxHandler(uint8_t* Buf, uint32_t Len)
 	// Define CDC RxHandler
 	#ifdef COMMAND_OVER_USB
     	CDC_Transmit_FS(Buf, Len);
-	#else
-    	_NOP();
 	#endif
 }
 
@@ -190,19 +200,32 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
 	switch (header->packetType) {
 		case PACKET_TYPE_MOVE:
 			// Decode move packet
-			decodeMovePacket();
+			uint16_t targetPos = decodeMovePacket();
+
+			char printBuff[64];
+			sprintf(printBuff, "%lu\n", targetPos);
+			printf(printBuff);
 
 			// Notify stepper thread that target position has changed
 			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
 			break;
 		case PACKET_TYPE_RETRACT_FULL:
 			// FIXME - Overwrite target position
+			printf("Retract Packet Received\n");
+
+			// Set target position in deviceStatusStruct
+
+			// Send back device status
 
 			// Notify stepper thread that target position has changed
 			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
 			break;
 		case PACKET_TYPE_EXTEND_FULL:
 			// FIXME - Overwrite target position
+			printf("Extend Packet Received\n");
+			// Set target position in deviceStatusStruct
+
+			// Send back device status
 
 			// Notify stepper thread that target position has changed
 			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
@@ -222,7 +245,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == SPI2_CS_Pin) {
-		HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, sizeof(txBuff));
+		HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
 	}
 }
 
@@ -610,7 +633,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
+  htim1.Init.Period = 4000;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -622,7 +645,7 @@ static void MX_TIM1_Init(void)
   sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 10;
+  sConfig.IC2Filter = 15;
   if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -730,7 +753,7 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 2000;
+  sConfigOC.Pulse = 20000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -925,6 +948,7 @@ void strelkaCommsFn(void *argument)
   for(;;)
   {
 //	  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
+	  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
     osDelay(100);
   }
   /* USER CODE END 5 */
@@ -966,7 +990,7 @@ void powerSenseFn(void *argument)
 	  HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 
 	  // Convert data from each channel to actual units
-    osDelay(1);
+    osDelay(100);
   }
   /* USER CODE END powerSenseFn */
 }
@@ -983,13 +1007,11 @@ void stepperCtrlFn(void *argument)
   /* USER CODE BEGIN stepperCtrlFn */
   /* Infinite loop */
 
+#ifdef USE_BUZZER
+	// Wait until buzzer complete
+	osThreadFlagsWait(buzzerDone, osFlagsWaitAny, osWaitForever);
+#endif
 	// Start up stepper handle
-	stepperConfig_t sCfg = {
-			.moveProfile 	= MOVE_TRAP,
-			.stepRes 		= MICROSTEP_1,
-			.stepperDir 	= 0
-	};
-
 	stepperIO_t sIO = {
 			.M0Port 		= MTR_M0_GPIO_Port,
 			.M0Pin 			= MTR_M0_Pin,
@@ -1016,7 +1038,7 @@ void stepperCtrlFn(void *argument)
 	stepperRotInfo_t sRot = {
 			.PWMPtr 		= PWMTimer,
 			.PWMStopPtr 	= PWMStopTimer,
-			.driveRes 		= REV_1,
+			.driveRes 		= REV_8,
 			.driverSteps 	= 0,
 			.encPPR 		= 1000,
 			.encPtr 		= EncoderTimer,
@@ -1025,20 +1047,70 @@ void stepperCtrlFn(void *argument)
 			.minAngle 		= 0.0
 	};
 
-	stepperHandle_t* blah = DRV_init(&sCfg, &sIO, &sRot);
-	DRV_wakeup(blah);
-	DRV_start(blah);
-//	DRV_move_steps(blah, 200, 1); // 1 means anticlockwise as of 31/01/25
-//	osDelay(1000);
-//	DRV_move_steps(blah, 100, 0);
-//	osDelay(1000);
-	DRV_sleep(blah);
+	stepperConfig_t sCfg = {
+			.moveProfile 	= MOVE_TRAP,
+			.stepRes 		= MICROSTEP_8,
+			.stepperDir 	= 0
+	};
+
+	stepperHandle_t* mtrHandle = DRV_init(&sCfg, &sIO, &sRot);
+	DRV_wakeup(mtrHandle);
+	DRV_start(mtrHandle);
+//	__HAL_TIM_SET_PRESCALER(mtrHandle->rotInfo->PWMPtr, 8);
+	DRV_set_pulse_freq(mtrHandle, 300);
+
+	DRV_move_steps(mtrHandle, 400, 1); // 1 means anticlockwise as of 31/01/25
+	osDelay(2000);
+	DRV_move_steps(mtrHandle, 400, 0);
+	osDelay(2000);
+	DRV_sleep(mtrHandle);
 
 	// Set up control loop parameters
-
+//	PIDController_t PID;
+//	float Kp = 1;
+//	float Ki = 0;
+//	float Kd = 0;
+//	float dt = 10;
+//
+//	float output_min = 0.0f;
+//	float output_min = 1.0f;
+//
+//	float alpha = 1;
+//
+//	PID_Init(PID, Kp, Ki, Kd, dt, alpha);
 
   for(;;)
   {
+//	  // Get encoder
+//	  uint32_t currentEnc = mtrHandle->rotInfo->encPtr->Instance->CNT;
+//
+//	  // Get absolute angular position
+//	  if (numOfRevolutions > 0) {
+//		  mtrHandle->rotInfo->encPulses = (int16_t) (mtrHandle->rotInfo->encPtr->Instance->ARR * numOfRevolutions + currentEnc);
+//	  }
+//	  else if (numOfRevolutions < 0) {
+//		  mtrHandle->rotInfo->encPulses = (int16_t) mtrHandle->rotInfo->encPtr->Instance->ARR * numOfRevolutions * -1 - (int16_t) (mtrHandle->rotInfo->encPtr->Instance->ARR - currentEnc);
+//	  }
+//	  else {
+//		  mtrHandle->rotInfo->encPulses = (int16_t) currentEnc;
+//	  }
+//
+//	  discStatus.currentPosition = mtrHandle->rotInfo->encPulses;
+//
+//	  // Get error based on this
+//	  float error = (float) (discStatus.targetPosition - discStatus.currentPosition);
+//
+//	  // Run PID controller -> outputs velocity
+//	  float outPID = PID_Update(&PID, error);
+//
+//	  // Get number of steps for this iteration of the control loop
+//	  int loopSteps =  outPID * PID.dt;
+//	  uint8_t dir = 0;
+//	  if (loopSteps < 0) {
+//		  dir = 0;
+//	  }
+//	  DRV_move_steps(mtrHandle, (uint16_t) loopSteps, dir);
+
 //	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 //	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
 //		  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
@@ -1048,11 +1120,13 @@ void stepperCtrlFn(void *argument)
 //	  vTaskSuspendAll();
 //	  DRV_move_steps(blah, 0, 0);
 //	  xTaskResumeAll();
-//	  uint32_t encoderVal = blah->rotInfo->encPtr->Instance->CNT;
-//	  char buff[64];
-//	  sprintf(buff, "%ld\n",encoderVal);
-//	  printf(buff);
-    osDelay(200);
+	  uint32_t encoderVal = mtrHandle->rotInfo->encPtr->Instance->CNT;
+	  char buff[64];
+	  sprintf(buff, "%ld\n",encoderVal);
+	  printf(buff);
+
+//    osDelay((int) PID.dt);
+	  osDelay(100);
   }
   /* USER CODE END stepperCtrlFn */
 }
@@ -1073,29 +1147,29 @@ void stateMachineFn(void *argument)
 
 // Buzzer only sounds when state machine task entered initially
 #ifdef USE_BUZZER
-	__HAL_TIM_SET_AUTORELOAD(PWMTimer, BUZZ_ARR-1);
-	__HAL_TIM_SET_PRESCALER(PWMTimer, BUZZ_PSC-1);
+//	__HAL_TIM_SET_AUTORELOAD(PWMTimer, BUZZ_ARR-1);
+//	__HAL_TIM_SET_PRESCALER(PWMTimer, BUZZ_PSC-1);
 	__HAL_TIM_SET_COMPARE(PWMTimer, BUZZ_CHANNEL, ((int) PWMTimer->Instance->ARR)/2);
 
-//	taskENTER_CRITICAL();
-//	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
-//	osDelay(100);
-//	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
-//	osDelay(100);
-//	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
-//	osDelay(100);
-//	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
-//	osDelay(100);
-//	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
-//	osDelay(100);
-//	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
-//	taskEXIT_CRITICAL();
+	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Start(PWMTimer, BUZZ_CHANNEL);
+	osDelay(100);
+	HAL_TIM_PWM_Stop(PWMTimer, BUZZ_CHANNEL);
+
+	osThreadFlagsSet(stepperCtrlTaskHandle, buzzerDone);
 #endif
 
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(100);
   }
   /* USER CODE END stateMachineFn */
 }
@@ -1114,7 +1188,7 @@ void decodeUSBFn(void *argument)
 	/* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(100);
   }
   /* USER CODE END decodeUSBFn */
 }
@@ -1136,13 +1210,26 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-  if (htim == &htim4) {
+  if (htim == PWMStopTimer) {
 		// Stop PWM from timer 1
 		HAL_TIM_PWM_Stop(PWMTimer, TIM_CHANNEL_1);
 
 		// FIMXE: Sleep the driver for now
 //		HAL_GPIO_WritePin(MTR_NSLP_GPIO_Port, MTR_NSLP_Pin, GPIO_PIN_RESET);
+
+
   }
+
+  if (htim == EncoderTimer) {
+	  // Check if encoder was decreasing or increasing
+	  if (__HAL_TIM_IS_TIM_COUNTING_DOWN(EncoderTimer) == 1) {
+		  numOfRevolutions -= 1;
+	  }
+	  else {
+		  numOfRevolutions += 1;
+	  }
+  }
+
   /* USER CODE END Callback 1 */
 }
 

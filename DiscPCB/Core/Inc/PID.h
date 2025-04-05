@@ -31,6 +31,6 @@ typedef struct {
     float alpha;        // Derivative low-pass filter coefficient (0 to 1)
 } PIDController_t;
 
-float PID_Update(PID_Controller* pid, float measured);
+float PID_Update(PIDController_t* pid, float error);
 
 #endif /* INC_PID_H_ */

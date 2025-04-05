@@ -10,6 +10,8 @@
 
 #include "stm32g4xx_hal.h"
 #include "String.h"
+#include "main.h"
+
 
 #define PACKET_TYPE_MOVE			0x10 // Strelka sends an extension to reach
 #define PACKET_TYPE_RETRACT_FULL 	0x20 // Strelka requests airbrakes fully closed
@@ -17,11 +19,12 @@
 #define PACKET_TYPE_DEVICE_STATUS	0x40 // Strelka requests status of the Disc
 #define PACKET_TYPE_POWER			0x50 // Strelka requests battery voltage and current readings
 
-#define PACKET_SIZE_DISC_RX			9
-#define PACKET_SIZE_STRELKA_RX		14
+#define PACKET_SIZE_DISC_RX			7
+#define PACKET_SIZE_STRELKA_RX		13
 
 // Define this buffer within main.c to be used in SPI Receive IT/DMA calls
 extern uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
+extern DeviceStatus_t discStatus;
 
 typedef struct {
 	uint8_t packetType;
@@ -32,7 +35,7 @@ typedef struct {
 typedef struct __attribute__((packed)) {
 	uint8_t header;
 	uint32_t timestamp;
-	uint32_t targetPosition;
+	uint16_t targetPosition;
 } PacketMove_t;
 
 typedef struct __attribute__((packed)) {
@@ -49,8 +52,8 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
 	uint8_t header;
 	uint32_t timestamp;
-	uint32_t currentPosition;
-	uint32_t targetPosition;
+	uint16_t currentPosition;
+	uint16_t targetPosition;
 	uint8_t isMoving;
 } PacketDeviceStatus_t;
 
@@ -62,12 +65,12 @@ typedef struct __attribute__((packed)) {
 } PacketPower_t;
 
 /* Decode and encode methods */
-void decodeMovePacket(void);		// Used by Disc to work out target position
+uint16_t decodeMovePacket(void);		// Used by Disc to work out target position
 void decodeDeviceStatus(void);		// Used by Strelka to work out status of Disc
 void decodePower(void);				// Used by Strelka to work out Disc power consumption
 
 // Both used by Disc to create packets for Strelka
-void encodeDeviceStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp, uint32_t currentPosition, uint32_t targetPosition, uint8_t isMoving);
+void encodeDeviceStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp, uint16_t currentPosition, uint16_t targetPosition, uint8_t isMoving);
 void encodePower(PacketPower_t* packetPtr, uint32_t timestamp, uint32_t battV, uint32_t battI);
 
 // Both used by Strelka to create packets for Disc

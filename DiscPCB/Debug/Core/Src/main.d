@@ -51,7 +51,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../USB_Device/Target/usbd_conf.h ../Core/Inc/DRV8825.h \
  ../Core/Inc/discStateMachine.h ../Core/Inc/threadFlags.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h \
- ../Core/Inc/SPI_Comms.h
+ ../Core/Inc/SPI_Comms.h ../Core/Inc/main.h ../Core/Inc/PID.h
 ../Core/Inc/main.h:
 ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h:
 ../Core/Inc/stm32g4xx_hal_conf.h:
@@ -108,3 +108,5 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/threadFlags.h:
 ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h:
 ../Core/Inc/SPI_Comms.h:
+../Core/Inc/main.h:
+../Core/Inc/PID.h:

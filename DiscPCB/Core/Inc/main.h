@@ -32,11 +32,19 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+
+#define RETRACT_FULL 0
+#define EXTEND_FULL 65535
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+typedef struct DeviceStatus {
+	uint32_t currentTime;
+	int16_t currentPosition;
+	int16_t targetPosition;
+	uint8_t isMoving;
+} DeviceStatus_t;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

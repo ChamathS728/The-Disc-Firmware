@@ -31,6 +31,8 @@ stepperHandle_t* DRV_init(stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr, stepper
 	// Wait 1ms for DRV to stabilise
 	osDelay(1);
 
+	// Configure microstep setting
+	DRV_microstep_config(sHandle, sCfgPtr->stepRes);
 	return sHandle;
 }
 //void DRV_deinit(stepperHandle_t* sHandlePtr) {
@@ -158,9 +160,7 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 
 
 }
-//void DRV_read_batt(ADC_HandleTypeDef* hadc) {
-//
-//}
+
 void DRV_move_angle_abs(stepperHandle_t* sHandlePtr, float angle) {
 	/*
 	 * Moves stepper motor to an absolute angle, measured by the encoder
@@ -173,6 +173,43 @@ void DRV_move_angle_abs(stepperHandle_t* sHandlePtr, float angle) {
 	// Get angle requirement: desired - actual
 	float angReq = ang - sHandlePtr->rotInfo->encPulses;
 }
+
+void DRV_set_pulse_freq(stepperHandle_t* stepperHandlePtr, uint16_t pulseFreq) {
+	/*
+	 * Sets the frequency of pulses using the current clock frequency
+	 * Assumes that the prescalar does not change
+	 *
+	 * pulseFreq should be a value between 10Hz and 100,000Hz
+	 * */
+	RCC_ClkInitTypeDef clkconfig;
+	uint32_t pFLatency;
+	HAL_RCC_GetClockConfig(&clkconfig, &pFLatency);
+	uint32_t APB1TimerClock = HAL_RCC_GetPCLK1Freq();
+	if (clkconfig.APB1CLKDivider != RCC_HCLK_DIV1) {
+		APB1TimerClock *= 2;
+	}
+	// Hold prescalar constant and calculate new ARR value
+	uint32_t prescaler = (uint32_t) (stepperHandlePtr->rotInfo->PWMPtr->Init.Prescaler + 1);
+	uint32_t timerTickFrequency = APB1TimerClock / prescaler;
+	uint32_t period = (timerTickFrequency / pulseFreq) - 1;
+
+	// Stop PWM temporarily
+    HAL_TIM_PWM_Stop(stepperHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
+    HAL_TIM_Base_Stop(stepperHandlePtr->rotInfo->PWMPtr);
+
+    // Update ARR and CCR values to maintain frequency and 50% duty cycle
+    __HAL_TIM_SET_AUTORELOAD(stepperHandlePtr->rotInfo->PWMPtr, period);
+    uint32_t pulse = ((period + 1) * 50) / 100;
+    __HAL_TIM_SET_COMPARE(stepperHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL, pulse);
+
+    /* Trigger an update event to apply changes immediately */
+    HAL_TIM_GenerateEvent(stepperHandlePtr->rotInfo->PWMPtr, TIM_EVENTSOURCE_UPDATE);
+
+    /* Restart the timer */
+    HAL_TIM_Base_Start(stepperHandlePtr->rotInfo->PWMPtr);
+    HAL_TIM_PWM_Start(stepperHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
+}
+
 //void DRV_retract_full(void) {
 //	//
 //}
