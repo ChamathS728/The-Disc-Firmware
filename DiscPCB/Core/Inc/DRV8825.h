@@ -108,10 +108,13 @@ typedef struct stepperRotInfo_t {
 	int16_t driverSteps;
 
 	// Number of pulses per revolution measured from encoder, eg: 1000
-	int16_t encPPR;
+	uint16_t encPPR;
 
 	// Current number of pulses measured from encoder
 	int16_t encPulses;
+
+	// Number of turns from gearbox. For a 12:1 (in:out)
+	uint8_t gearRatio;
 
 } stepperRotInfo_t;
 
@@ -139,8 +142,10 @@ void DRV_set_pulse_freq(stepperHandle_t* stepperHandlePtr, uint16_t pulseFreq);
 
 void DRV_start(stepperHandle_t* stepperHandlePtr);
 void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir);
-void DRV_read_current(ADC_HandleTypeDef* hadc);
-void DRV_move_angle(stepperHandle_t* sHandlePtr, float angleAbs);
+void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float absAngle);
+void DRV_move_angle_rel_OL(stepperHandle_t* sHandlePtr, float relAngle);
+void DRV_set_pulse_freq(stepperHandle_t* sHandlePtr, uint16_t pulseFreq);
+void DRV_update_angular_pos(stepperHandle_t* sHandlePtr);
 void DRV_retract_full(void);
 void DRV_extend_full(void);
 

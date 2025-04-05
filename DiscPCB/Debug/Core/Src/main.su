@@ -20,8 +20,8 @@
 ../Core/Src/main.c:843:13:MX_GPIO_Init	40	static
 ../Core/Src/main.c:931:6:strelkaCommsFn	16	static
 ../Core/Src/main.c:964:6:powerSenseFn	104	static
-../Core/Src/main.c:1005:6:stepperCtrlFn	200	static
-../Core/Src/main.c:1141:6:stateMachineFn	16	static
-../Core/Src/main.c:1184:6:decodeUSBFn	16	static
-../Core/Src/main.c:1204:6:HAL_TIM_PeriodElapsedCallback	16	static
-../Core/Src/main.c:1240:6:Error_Handler	8	static,ignoring_inline_asm
+../Core/Src/main.c:1005:6:stepperCtrlFn	136	static
+../Core/Src/main.c:1150:6:stateMachineFn	16	static
+../Core/Src/main.c:1193:6:decodeUSBFn	16	static
+../Core/Src/main.c:1213:6:HAL_TIM_PeriodElapsedCallback	16	static
+../Core/Src/main.c:1249:6:Error_Handler	8	static,ignoring_inline_asm

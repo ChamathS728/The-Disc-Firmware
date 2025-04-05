@@ -40,7 +40,7 @@
 /* USER CODE BEGIN PD */
 //#define COMMAND_OVER_USB 1	// Uncomment if we want to receive data from USB
 
-#define USE_BUZZER 1		// Uncomment if we don't want the buzzer to sound
+//#define USE_BUZZER 1		// Uncomment if we don't want the buzzer to sound
 #define BUZZ_ARR 40000
 #define BUZZ_PSC 9
 #define BUZZ_CHANNEL TIM_CHANNEL_2
@@ -1038,7 +1038,7 @@ void stepperCtrlFn(void *argument)
 	stepperRotInfo_t sRot = {
 			.PWMPtr 		= PWMTimer,
 			.PWMStopPtr 	= PWMStopTimer,
-			.driveRes 		= REV_8,
+			.driveRes 		= REV_16,
 			.driverSteps 	= 0,
 			.encPPR 		= 1000,
 			.encPtr 		= EncoderTimer,
@@ -1049,7 +1049,7 @@ void stepperCtrlFn(void *argument)
 
 	stepperConfig_t sCfg = {
 			.moveProfile 	= MOVE_TRAP,
-			.stepRes 		= MICROSTEP_8,
+			.stepRes 		= MICROSTEP_16,
 			.stepperDir 	= 0
 	};
 
@@ -1057,7 +1057,7 @@ void stepperCtrlFn(void *argument)
 	DRV_wakeup(mtrHandle);
 	DRV_start(mtrHandle);
 //	__HAL_TIM_SET_PRESCALER(mtrHandle->rotInfo->PWMPtr, 8);
-	DRV_set_pulse_freq(mtrHandle, 300);
+	DRV_set_pulse_freq(mtrHandle, 400);
 
 	DRV_move_steps(mtrHandle, 400, 1); // 1 means anticlockwise as of 31/01/25
 	osDelay(2000);
@@ -1120,10 +1120,19 @@ void stepperCtrlFn(void *argument)
 //	  vTaskSuspendAll();
 //	  DRV_move_steps(blah, 0, 0);
 //	  xTaskResumeAll();
-	  uint32_t encoderVal = mtrHandle->rotInfo->encPtr->Instance->CNT;
-	  char buff[64];
-	  sprintf(buff, "%ld\n",encoderVal);
-	  printf(buff);
+//	  DRV_move_steps(mtrHandle, 40000, 1); // 1 means anticlockwise as of 31/01/25
+//	  uint32_t encoderVal = mtrHandle->rotInfo->encPtr->Instance->CNT;
+//	  char buff[64];
+//	  sprintf(buff, "%ld\n",encoderVal);
+//	  printf(buff);
+//
+//	  osDelay(2000);
+//	  DRV_move_steps(mtrHandle, 40000, 0);
+//	  encoderVal = mtrHandle->rotInfo->encPtr->Instance->CNT;
+//	  sprintf(buff, "%ld\n",encoderVal);
+//	  printf(buff);
+//
+//	  osDelay(2000);
 
 //    osDelay((int) PID.dt);
 	  osDelay(100);
