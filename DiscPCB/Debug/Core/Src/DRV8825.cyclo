@@ -4,7 +4,7 @@
 ../Core/Src/DRV8825.c:67:6:DRV_microstep_config	7
 ../Core/Src/DRV8825.c:124:6:DRV_start	7
 ../Core/Src/DRV8825.c:156:6:DRV_move_steps	3
-../Core/Src/DRV8825.c:182:6:DRV_move_angle_abs_OL	3
-../Core/Src/DRV8825.c:199:6:DRV_move_angle_rel_OL	2
-../Core/Src/DRV8825.c:221:6:DRV_set_pulse_freq	2
-../Core/Src/DRV8825.c:257:6:DRV_update_angular_pos	3
+../Core/Src/DRV8825.c:182:6:DRV_move_angle_abs_OL	1
+../Core/Src/DRV8825.c:201:6:DRV_move_angle_rel_OL	2
+../Core/Src/DRV8825.c:223:6:DRV_set_pulse_freq	2
+../Core/Src/DRV8825.c:259:6:DRV_update_angular_pos	3

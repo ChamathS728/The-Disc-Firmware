@@ -93,10 +93,10 @@ const osThreadAttr_t stateMachineTas_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
-/* Definitions for decodeUSBTask */
-osThreadId_t decodeUSBTaskHandle;
-const osThreadAttr_t decodeUSBTask_attributes = {
-  .name = "decodeUSBTask",
+/* Definitions for sampleEncoder */
+osThreadId_t sampleEncoderHandle;
+const osThreadAttr_t sampleEncoder_attributes = {
+  .name = "sampleEncoder",
   .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
@@ -105,15 +105,15 @@ osMessageQueueId_t adcBattBuffHandle;
 const osMessageQueueAttr_t adcBattBuff_attributes = {
   .name = "adcBattBuff"
 };
-/* Definitions for usbBuff */
-osMessageQueueId_t usbBuffHandle;
-const osMessageQueueAttr_t usbBuff_attributes = {
-  .name = "usbBuff"
-};
 /* Definitions for motorData */
 osMessageQueueId_t motorDataHandle;
 const osMessageQueueAttr_t motorData_attributes = {
   .name = "motorData"
+};
+/* Definitions for timEncoder */
+osMessageQueueId_t timEncoderHandle;
+const osMessageQueueAttr_t timEncoder_attributes = {
+  .name = "timEncoder"
 };
 /* USER CODE BEGIN PV */
 
@@ -135,7 +135,7 @@ void strelkaCommsFn(void *argument);
 void powerSenseFn(void *argument);
 void stepperCtrlFn(void *argument);
 void stateMachineFn(void *argument);
-void decodeUSBFn(void *argument);
+void sampleEncoderFn(void *argument);
 
 /* USER CODE BEGIN PFP */
 uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
@@ -315,11 +315,11 @@ int main(void)
   /* creation of adcBattBuff */
   adcBattBuffHandle = osMessageQueueNew (4, sizeof(uint16_t), &adcBattBuff_attributes);
 
-  /* creation of usbBuff */
-  usbBuffHandle = osMessageQueueNew (64, sizeof(uint16_t), &usbBuff_attributes);
-
   /* creation of motorData */
   motorDataHandle = osMessageQueueNew (64, sizeof(uint16_t), &motorData_attributes);
+
+  /* creation of timEncoder */
+  timEncoderHandle = osMessageQueueNew (16, sizeof(uint16_t), &timEncoder_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -338,8 +338,8 @@ int main(void)
   /* creation of stateMachineTas */
   stateMachineTasHandle = osThreadNew(stateMachineFn, NULL, &stateMachineTas_attributes);
 
-  /* creation of decodeUSBTask */
-  decodeUSBTaskHandle = osThreadNew(decodeUSBFn, NULL, &decodeUSBTask_attributes);
+  /* creation of sampleEncoder */
+  sampleEncoderHandle = osThreadNew(sampleEncoderFn, NULL, &sampleEncoder_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -1044,7 +1044,8 @@ void stepperCtrlFn(void *argument)
 			.encPtr 		= EncoderTimer,
 			.encPulses 		= 0,
 			.maxAngle 		= 90.0,
-			.minAngle 		= 0.0
+			.minAngle 		= 0.0,
+			.gearRatio		= 1
 	};
 
 	stepperConfig_t sCfg = {
@@ -1060,17 +1061,17 @@ void stepperCtrlFn(void *argument)
 	DRV_set_pulse_freq(mtrHandle, 400);
 
 
-	DRV_move_angle_abs_OL(mtrHandle, 45.0);
-	osDelay(2000);
-	DRV_move_angle_abs_OL(mtrHandle, 135.0);
-	osDelay(2000);
-	DRV_move_angle_abs_OL(mtrHandle, -90.0);
-	osDelay(6000);
+//	DRV_move_angle_abs_OL(mtrHandle, 45.0);
+//	osDelay(2000);
+//	DRV_move_angle_abs_OL(mtrHandle, 135.0);
+//	osDelay(2000);
+//	DRV_move_angle_abs_OL(mtrHandle, -90.0);
+//	osDelay(6000);
 
-//	DRV_move_angle_rel_OL(mtrHandle, 360.0);
-//	osDelay(6000);
-//	DRV_move_angle_rel_OL(mtrHandle, -270.0);
-//	osDelay(6000);
+	DRV_move_angle_rel_OL(mtrHandle, 360.0);
+	osDelay(6000);
+	DRV_move_angle_rel_OL(mtrHandle, -270.0);
+	osDelay(6000);
 
 //	DRV_move_steps(mtrHandle, 400, 1); // 1 means anticlockwise as of 31/01/25
 //	osDelay(2000);
@@ -1196,23 +1197,30 @@ void stateMachineFn(void *argument)
   /* USER CODE END stateMachineFn */
 }
 
-/* USER CODE BEGIN Header_decodeUSBFn */
+/* USER CODE BEGIN Header_sampleEncoderFn */
 /**
-* @brief Function implementing the decodeUSBTask thread.
+* @brief Function implementing the sampleEncoder thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_decodeUSBFn */
-void decodeUSBFn(void *argument)
+/* USER CODE END Header_sampleEncoderFn */
+void sampleEncoderFn(void *argument)
 {
-  /* USER CODE BEGIN decodeUSBFn */
+  /* USER CODE BEGIN sampleEncoderFn */
 
-	/* Infinite loop */
+
+  /* Infinite loop */
   for(;;)
   {
-    osDelay(100);
+	  // Read from encoder
+	  uint16_t currentEncoder = EncoderTimer->Instance->CNT;
+
+	  // Add it to the queue - message priority ignored
+	  osMessageQueuePut(timEncoderHandle, &currentEncoder, 0, osWaitForever);
+
+    osDelay(1);
   }
-  /* USER CODE END decodeUSBFn */
+  /* USER CODE END sampleEncoderFn */
 }
 
 /**

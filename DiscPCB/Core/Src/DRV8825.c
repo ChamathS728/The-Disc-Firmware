@@ -185,12 +185,14 @@ void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float angle) {
 	 * */
 
 	// Clip angle between min and max
-	float ang = (angle > sHandlePtr->rotInfo->minAngle) ? angle : sHandlePtr->rotInfo->minAngle;
-	ang = (angle < sHandlePtr->rotInfo->maxAngle) ? ang : sHandlePtr->rotInfo->maxAngle;
+//	float ang = (angle > sHandlePtr->rotInfo->minAngle) ? angle : sHandlePtr->rotInfo->minAngle;
+//	ang = (angle < sHandlePtr->rotInfo->maxAngle) ? ang : sHandlePtr->rotInfo->maxAngle;
 
 	// Get angle requirement: desired - actual
 	float currentAngle = numOfRevolutions*360.0 + (float) (sHandlePtr->rotInfo->encPulses % (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4));
-	int16_t angReq = ang - sHandlePtr->rotInfo->encPulses / (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4);
+	float angReq = angle - currentAngle;
+
+//	int16_t angReq = angle - sHandlePtr->rotInfo->encPulses / (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4);
 
 	// Move relative angle
 	DRV_move_angle_rel_OL(sHandlePtr, angReq);

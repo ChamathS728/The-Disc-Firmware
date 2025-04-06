@@ -21,7 +21,7 @@
 ../Core/Src/main.c:931:6:strelkaCommsFn	16	static
 ../Core/Src/main.c:964:6:powerSenseFn	104	static
 ../Core/Src/main.c:1005:6:stepperCtrlFn	136	static
-../Core/Src/main.c:1163:6:stateMachineFn	16	static
-../Core/Src/main.c:1206:6:decodeUSBFn	16	static
-../Core/Src/main.c:1226:6:HAL_TIM_PeriodElapsedCallback	16	static
-../Core/Src/main.c:1262:6:Error_Handler	8	static,ignoring_inline_asm
+../Core/Src/main.c:1164:6:stateMachineFn	16	static
+../Core/Src/main.c:1207:6:sampleEncoderFn	24	static
+../Core/Src/main.c:1234:6:HAL_TIM_PeriodElapsedCallback	16	static
+../Core/Src/main.c:1270:6:Error_Handler	8	static,ignoring_inline_asm
