@@ -1038,7 +1038,7 @@ void stepperCtrlFn(void *argument)
 	stepperRotInfo_t sRot = {
 			.PWMPtr 		= PWMTimer,
 			.PWMStopPtr 	= PWMStopTimer,
-			.driveRes 		= REV_16,
+			.driveRes 		= REV_8,
 			.driverSteps 	= 0,
 			.encPPR 		= 1000,
 			.encPtr 		= EncoderTimer,
@@ -1049,7 +1049,7 @@ void stepperCtrlFn(void *argument)
 
 	stepperConfig_t sCfg = {
 			.moveProfile 	= MOVE_TRAP,
-			.stepRes 		= MICROSTEP_16,
+			.stepRes 		= MICROSTEP_8,
 			.stepperDir 	= 0
 	};
 
@@ -1059,10 +1059,23 @@ void stepperCtrlFn(void *argument)
 //	__HAL_TIM_SET_PRESCALER(mtrHandle->rotInfo->PWMPtr, 8);
 	DRV_set_pulse_freq(mtrHandle, 400);
 
-	DRV_move_steps(mtrHandle, 400, 1); // 1 means anticlockwise as of 31/01/25
+
+	DRV_move_angle_abs_OL(mtrHandle, 45.0);
 	osDelay(2000);
-	DRV_move_steps(mtrHandle, 400, 0);
+	DRV_move_angle_abs_OL(mtrHandle, 135.0);
 	osDelay(2000);
+	DRV_move_angle_abs_OL(mtrHandle, -90.0);
+	osDelay(6000);
+
+//	DRV_move_angle_rel_OL(mtrHandle, 360.0);
+//	osDelay(6000);
+//	DRV_move_angle_rel_OL(mtrHandle, -270.0);
+//	osDelay(6000);
+
+//	DRV_move_steps(mtrHandle, 400, 1); // 1 means anticlockwise as of 31/01/25
+//	osDelay(2000);
+//	DRV_move_steps(mtrHandle, 400, 0);
+//	osDelay(2000);
 	DRV_sleep(mtrHandle);
 
 	// Set up control loop parameters

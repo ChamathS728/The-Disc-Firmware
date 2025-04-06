@@ -189,8 +189,8 @@ void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float angle) {
 	ang = (angle < sHandlePtr->rotInfo->maxAngle) ? ang : sHandlePtr->rotInfo->maxAngle;
 
 	// Get angle requirement: desired - actual
-	float currentAngle = numOfRevolutions*360.0 + (float) (sHandlePtr->rotInfo->encPulses % (mtrHandle->rotInfo->encPtr->Instance->ARR * 4));
-	int16_t angReq = ang - sHandlePtr->rotInfo->encPulses / (mtrHandle->rotInfo->encPtr->Instance->ARR * 4);
+	float currentAngle = numOfRevolutions*360.0 + (float) (sHandlePtr->rotInfo->encPulses % (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4));
+	int16_t angReq = ang - sHandlePtr->rotInfo->encPulses / (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4);
 
 	// Move relative angle
 	DRV_move_angle_rel_OL(sHandlePtr, angReq);
@@ -256,17 +256,17 @@ void DRV_set_pulse_freq(stepperHandle_t* sHandlePtr, uint16_t pulseFreq) {
 
 void DRV_update_angular_pos(stepperHandle_t* sHandlePtr) {
 	  // Get encoder
-	  uint32_t currentEnc = mtrHandle->rotInfo->encPtr->Instance->CNT;
+	  uint32_t currentEnc = sHandlePtr->rotInfo->encPtr->Instance->CNT;
 
 	  // Get absolute angular position
 	  if (numOfRevolutions > 0) {
-		  mtrHandle->rotInfo->encPulses = (int16_t) (mtrHandle->rotInfo->encPtr->Instance->ARR * 4 * numOfRevolutions + currentEnc);
+		  sHandlePtr->rotInfo->encPulses = (int16_t) (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4 * numOfRevolutions + currentEnc);
 	  }
 	  else if (numOfRevolutions < 0) {
-		  mtrHandle->rotInfo->encPulses = (int16_t) mtrHandle->rotInfo->encPtr->Instance->ARR * -4 * numOfRevolutions - (int16_t) (mtrHandle->rotInfo->encPtr->Instance->ARR - currentEnc);
+		  sHandlePtr->rotInfo->encPulses = (int16_t) sHandlePtr->rotInfo->encPtr->Instance->ARR * -4 * numOfRevolutions - (int16_t) (sHandlePtr->rotInfo->encPtr->Instance->ARR - currentEnc);
 	  }
 	  else {
-		  mtrHandle->rotInfo->encPulses = (int16_t) currentEnc;
+		  sHandlePtr->rotInfo->encPulses = (int16_t) currentEnc;
 	  }
 }
 
