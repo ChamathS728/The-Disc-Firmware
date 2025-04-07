@@ -1061,13 +1061,6 @@ void stepperCtrlFn(void *argument)
 	DRV_set_pulse_freq(mtrHandle, 400);
 
 
-//	DRV_move_angle_abs_OL(mtrHandle, 45.0);
-//	osDelay(2000);
-//	DRV_move_angle_abs_OL(mtrHandle, 135.0);
-//	osDelay(2000);
-//	DRV_move_angle_abs_OL(mtrHandle, -90.0);
-//	osDelay(6000);
-
 	DRV_move_angle_rel_OL(mtrHandle, 360.0);
 	osDelay(6000);
 	DRV_move_angle_rel_OL(mtrHandle, -270.0);
@@ -1080,50 +1073,40 @@ void stepperCtrlFn(void *argument)
 	DRV_sleep(mtrHandle);
 
 	// Set up control loop parameters
-//	PIDController_t PID;
-//	float Kp = 1;
-//	float Ki = 0;
-//	float Kd = 0;
-//	float dt = 10;
-//
-//	float output_min = 0.0f;
-//	float output_min = 1.0f;
-//
-//	float alpha = 1;
-//
-//	PID_Init(PID, Kp, Ki, Kd, dt, alpha);
+	PIDController_t PID;
+	float Kp = 1;
+	float Ki = 0;
+	float Kd = 0;
+	float dt = 10;
+
+	float output_min = 0.0f;
+	float output_min = 1.0f;
+
+	float alpha = 1;
+	float setpoint = 90.0;
+
+	PID_Init(PID, Kp, Ki, Kd, dt, alpha, setpoint);
+	discStatus.targetPosition = setpoint;
 
   for(;;)
   {
-//	  // Get encoder
-//	  uint32_t currentEnc = mtrHandle->rotInfo->encPtr->Instance->CNT;
-//
-//	  // Get absolute angular position
-//	  if (numOfRevolutions > 0) {
-//		  mtrHandle->rotInfo->encPulses = (int16_t) (mtrHandle->rotInfo->encPtr->Instance->ARR * numOfRevolutions + currentEnc);
-//	  }
-//	  else if (numOfRevolutions < 0) {
-//		  mtrHandle->rotInfo->encPulses = (int16_t) mtrHandle->rotInfo->encPtr->Instance->ARR * numOfRevolutions * -1 - (int16_t) (mtrHandle->rotInfo->encPtr->Instance->ARR - currentEnc);
-//	  }
-//	  else {
-//		  mtrHandle->rotInfo->encPulses = (int16_t) currentEnc;
-//	  }
-//
-//	  discStatus.currentPosition = mtrHandle->rotInfo->encPulses;
-//
-//	  // Get error based on this
-//	  float error = (float) (discStatus.targetPosition - discStatus.currentPosition);
-//
-//	  // Run PID controller -> outputs velocity
-//	  float outPID = PID_Update(&PID, error);
-//
-//	  // Get number of steps for this iteration of the control loop
-//	  int loopSteps =  outPID * PID.dt;
-//	  uint8_t dir = 0;
-//	  if (loopSteps < 0) {
-//		  dir = 0;
-//	  }
-//	  DRV_move_steps(mtrHandle, (uint16_t) loopSteps, dir);
+	  // Get encoder
+	  DRV_update_angular_pos(mtrHandle);
+	  discStatus.currentPosition = mtrHandle->rotInfo->encPulses;
+
+	  // Get error based on this
+	  float error = (float) (discStatus.targetPosition - discStatus.currentPosition);
+
+	  // Run PID controller -> outputs velocity in steps/s
+	  float outPID = PID_Update(&PID, error);
+
+	  // Get number of steps for this iteration of the control loop
+	  int loopSteps =  outPID * PID.dt;
+	  uint8_t dir = 0;
+	  if (loopSteps < 0) {
+		  dir = 0;
+	  }
+	  DRV_move_steps(mtrHandle, (uint16_t) loopSteps, dir);
 
 //	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 //	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {

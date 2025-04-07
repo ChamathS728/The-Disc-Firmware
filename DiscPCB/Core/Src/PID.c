@@ -9,7 +9,7 @@
 void PID_Init(PIDController_t* pid,
               float Kp, float Ki, float Kd, float dt,
               float output_min, float output_max,
-              float alpha)
+              float alpha, float setpoint)
 {
     pid->Kp = Kp;
     pid->Ki = Ki;
@@ -26,7 +26,7 @@ void PID_Init(PIDController_t* pid,
     pid->integral = 0.0f;
     pid->prev_error = 0.0f;
     pid->derivative = 0.0f;
-    pid->setpoint = 0.0f;
+    pid->setpoint = setpoint;
 }
 
 float PID_Update(PIDController_t* pid, float error)
