@@ -41,8 +41,8 @@ extern "C" {
 /* USER CODE BEGIN ET */
 typedef struct DeviceStatus {
 	uint32_t currentTime;
-	int16_t currentPosition;
-	int16_t targetPosition;
+	float currentPosition;
+	float targetPosition;
 	uint8_t isMoving;
 } DeviceStatus_t;
 /* USER CODE END ET */

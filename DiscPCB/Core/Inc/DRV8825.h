@@ -94,9 +94,6 @@ typedef struct stepperRotInfo_t {
 	TIM_HandleTypeDef* PWMPtr;
 	TIM_HandleTypeDef* PWMStopPtr;
 
-	// Encoder timer
-	TIM_HandleTypeDef* encPtr;
-
 	// Absolute min and max angle, not relative
 	float minAngle;
 	float maxAngle;
@@ -107,14 +104,7 @@ typedef struct stepperRotInfo_t {
 	// Current number of steps according to driver
 	int16_t driverSteps;
 
-	// Number of pulses per revolution measured from encoder, eg: 1000
-	uint16_t encPPR;
-
-	// Current number of pulses measured from encoder
-	int16_t encPulses;
-
-	// Number of turns from gearbox. For a 12:1 (in:out)
-	uint8_t gearRatio;
+	uint16_t pulseFreq;
 
 } stepperRotInfo_t;
 
@@ -145,7 +135,6 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir);
 void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float absAngle);
 void DRV_move_angle_rel_OL(stepperHandle_t* sHandlePtr, float relAngle);
 void DRV_set_pulse_freq(stepperHandle_t* sHandlePtr, uint16_t pulseFreq);
-void DRV_update_angular_pos(stepperHandle_t* sHandlePtr);
 void DRV_retract_full(void);
 void DRV_extend_full(void);
 

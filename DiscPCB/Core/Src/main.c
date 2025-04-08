@@ -29,6 +29,7 @@
 #include "threadFlags.h"
 #include "SPI_Comms.h"
 #include "PID.h"
+#include "encoder.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +45,11 @@
 #define BUZZ_ARR 40000
 #define BUZZ_PSC 9
 #define BUZZ_CHANNEL TIM_CHANNEL_2
+
+#define ENC_SAMPLE_TIME_MS 10
+
+#define ENC_TICKS_TO_DEG 0.09
+#define DEG_TO_ENC_TICKS 11.11
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,6 +70,7 @@ TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim8;
 
 /* Definitions for strelkaCommsTas */
 osThreadId_t strelkaCommsTasHandle;
@@ -131,6 +138,7 @@ static void MX_TIM3_Init(void);
 static void MX_CORDIC_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM8_Init(void);
 void strelkaCommsFn(void *argument);
 void powerSenseFn(void *argument);
 void stepperCtrlFn(void *argument);
@@ -145,10 +153,10 @@ uint8_t txDiscSPI[PACKET_SIZE_STRELKA_RX];
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 TIM_HandleTypeDef* EncoderTimer = &htim1;
-TIM_HandleTypeDef* MillisTimer = &htim2;
+TIM_HandleTypeDef* MicrosTimer = &htim2;
 TIM_HandleTypeDef* PWMTimer = &htim3;
 TIM_HandleTypeDef* PWMStopTimer = &htim4;
-
+TIM_HandleTypeDef* MillisTimer = &htim8;
 SPI_HandleTypeDef* StrelkaV2SPI = &hspi2;
 
 // Initialise buffers
@@ -249,9 +257,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	}
 }
 
+uint32_t micros(void) {
+	return MicrosTimer->Instance->CNT;
+}
+
 uint32_t millis(void) {
 	return MillisTimer->Instance->CNT;
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -292,6 +305,7 @@ int main(void)
   MX_CORDIC_Init();
   MX_TIM4_Init();
   MX_TIM2_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -347,7 +361,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
-
+  HAL_TIM_Base_Start(MicrosTimer);
+  HAL_TIM_Base_Start(MillisTimer);
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -682,7 +697,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 144-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 4294967295;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -815,6 +830,53 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief TIM8 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM8_Init(void)
+{
+
+  /* USER CODE BEGIN TIM8_Init 0 */
+
+  /* USER CODE END TIM8_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM8_Init 1 */
+
+  /* USER CODE END TIM8_Init 1 */
+  htim8.Instance = TIM8;
+  htim8.Init.Prescaler = 144-1;
+  htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim8.Init.Period = 65535;
+  htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim8.Init.RepetitionCounter = 0;
+  htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim8, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim8, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM8_Init 2 */
+
+  /* USER CODE END TIM8_Init 2 */
 
 }
 
@@ -1040,12 +1102,9 @@ void stepperCtrlFn(void *argument)
 			.PWMStopPtr 	= PWMStopTimer,
 			.driveRes 		= REV_8,
 			.driverSteps 	= 0,
-			.encPPR 		= 1000,
-			.encPtr 		= EncoderTimer,
-			.encPulses 		= 0,
 			.maxAngle 		= 90.0,
 			.minAngle 		= 0.0,
-			.gearRatio		= 1
+
 	};
 
 	stepperConfig_t sCfg = {
@@ -1058,55 +1117,90 @@ void stepperCtrlFn(void *argument)
 	DRV_wakeup(mtrHandle);
 	DRV_start(mtrHandle);
 //	__HAL_TIM_SET_PRESCALER(mtrHandle->rotInfo->PWMPtr, 8);
-	DRV_set_pulse_freq(mtrHandle, 400);
+	DRV_microstep_config(mtrHandle, MICROSTEP_32);
+	DRV_set_pulse_freq(mtrHandle, 800);
 
 
-	DRV_move_angle_rel_OL(mtrHandle, 360.0);
-	osDelay(6000);
-	DRV_move_angle_rel_OL(mtrHandle, -270.0);
-	osDelay(6000);
+//	DRV_move_angle_rel_OL(mtrHandle, 360.0);
+//	osDelay(6000);
+//	DRV_move_angle_rel_OL(mtrHandle, -270.0);
+//	osDelay(6000);
 
 //	DRV_move_steps(mtrHandle, 400, 1); // 1 means anticlockwise as of 31/01/25
 //	osDelay(2000);
 //	DRV_move_steps(mtrHandle, 400, 0);
 //	osDelay(2000);
-	DRV_sleep(mtrHandle);
+//	DRV_sleep(mtrHandle);
 
 	// Set up control loop parameters
-	PIDController_t PID;
-	float Kp = 1;
-	float Ki = 0;
-	float Kd = 0;
-	float dt = 10;
+	float Kp = 0.05;
+	float Ki = 0.001;
+	float Kd = 0.0;
+	float dt = 0.01;
 
-	float output_min = 0.0f;
-	float output_min = 1.0f;
+	// Constant output max/min for a fixed speed/microstep resolution
+	float output_min = (float) mtrHandle->rotInfo->pulseFreq * -dt;
+	float output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
 
 	float alpha = 1;
-	float setpoint = 90.0;
+	float setpoint = 180.0;
 
-	PID_Init(PID, Kp, Ki, Kd, dt, alpha, setpoint);
+	PIDController_t PID = {
+		.Kp = Kp,
+		.Ki = Ki,
+		.Kd = Kd,
+		.dt = dt,
+		.output_min = output_min,
+		.output_max = output_max,
+		.alpha = alpha,
+		.integral = 0.0f,
+		.prev_error = 0.0f,
+		.derivative = 0.0f,
+		.setpoint = setpoint
+	};
 	discStatus.targetPosition = setpoint;
+
+	float deadband = 1.0f;
+
+	float lastPrintTime = millis();
+	uint8_t printBuff[64];
 
   for(;;)
   {
-	  // Get encoder
-	  DRV_update_angular_pos(mtrHandle);
-	  discStatus.currentPosition = mtrHandle->rotInfo->encPulses;
 
 	  // Get error based on this
-	  float error = (float) (discStatus.targetPosition - discStatus.currentPosition);
+	  float error = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
+//	  float error = discStatus.targetPosition - discStatus.currentPosition;
 
-	  // Run PID controller -> outputs velocity in steps/s
-	  float outPID = PID_Update(&PID, error);
+	  float blah = PID_Update(&PID, error);
 
-	  // Get number of steps for this iteration of the control loop
-	  int loopSteps =  outPID * PID.dt;
-	  uint8_t dir = 0;
-	  if (loopSteps < 0) {
-		  dir = 0;
+	  if (millis() - lastPrintTime > 500) {
+		  sprintf(printBuff, "%.2f, %.2f\n", error, blah);
+		  printf(printBuff);
+		  lastPrintTime = millis();
 	  }
-	  DRV_move_steps(mtrHandle, (uint16_t) loopSteps, dir);
+
+
+	  if (error > deadband || error < -deadband) {
+		  // Run PID controller -> outputs velocity in deg/s
+		  float outPID = PID_Update(&PID, error) * PID.dt;
+
+		  if (outPID > 0) {
+			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
+		  }
+		  else {
+			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+		  }
+
+		  // Get number of steps for this iteration of the control loop
+		  DRV_move_angle_rel_OL(mtrHandle, outPID);
+
+	  }
+	  else {
+		  DRV_sleep(mtrHandle);
+//		  DRV_move_angle_rel_OL(mtrHandle, 0);
+	  }
+
 
 //	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
 //	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
@@ -1132,7 +1226,7 @@ void stepperCtrlFn(void *argument)
 //	  osDelay(2000);
 
 //    osDelay((int) PID.dt);
-	  osDelay(100);
+	  osDelay(10);
   }
   /* USER CODE END stepperCtrlFn */
 }
@@ -1190,17 +1284,36 @@ void stateMachineFn(void *argument)
 void sampleEncoderFn(void *argument)
 {
   /* USER CODE BEGIN sampleEncoderFn */
+	encoderHandle_t eHandlePtr = {
+			.encTimer = EncoderTimer,
+			.pulseVel = 0.0f,
+			.totalPulses = 0.
+	};
 
+	encoderStart(&eHandlePtr, 1000, 1);
 
+	uint32_t previousTime = millis();
+	uint32_t currentTime = millis();
+	float dt = -1;
   /* Infinite loop */
   for(;;)
   {
-	  // Read from encoder
-	  uint16_t currentEncoder = EncoderTimer->Instance->CNT;
+	  dt = currentTime - previousTime;
 
-	  // Add it to the queue - message priority ignored
-	  osMessageQueuePut(timEncoderHandle, &currentEncoder, 0, osWaitForever);
+	  if (dt > ENC_SAMPLE_TIME_MS) {
+		  // Read from encoder
+		  sampleEncoder(&eHandlePtr, dt/1E3);
 
+		  // Update the current position
+		  discStatus.currentPosition = eHandlePtr.totalPulses * ENC_TICKS_TO_DEG;
+
+//		  // Add it to the queue - message priority ignored
+//		  osMessageQueuePut(timEncoderHandle, &currentEncoder, 0, osWaitForever);
+
+		  previousTime = millis();
+	  }
+
+	  currentTime = millis();
     osDelay(1);
   }
   /* USER CODE END sampleEncoderFn */

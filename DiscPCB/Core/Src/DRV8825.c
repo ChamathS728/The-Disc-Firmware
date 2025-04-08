@@ -36,12 +36,6 @@ stepperHandle_t* DRV_init(stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr, stepper
 	// Configure microstep setting
 	DRV_microstep_config(sHandle, sCfgPtr->stepRes);
 
-	// Set prescalar for encoder timer to match gear ratio
-	__HAL_TIM_SET_PRESCALER(sRotPtr->encPtr, (uint16_t) sRotPtr->gearRatio - 1);
-
-	// Set ARR for encoder timer to match PPR from Encoder
-	__HAL_TIM_SET_AUTORELOAD(sRotPtr->encPtr, (uint16_t) sRotPtr->encPPR);
-
 	return sHandle;
 }
 //void DRV_deinit(stepperHandle_t* sHandlePtr) {
@@ -128,27 +122,19 @@ void DRV_start(stepperHandle_t* sHandlePtr) {
 
 	// Start Timers
 
-	if (HAL_OK != HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->PWMStopPtr)) {
+	if (HAL_OK != HAL_TIM_Base_Start(sHandlePtr->rotInfo->PWMStopPtr)) {
 		osDelay(100000);
 	}
 
-	if (HAL_OK != HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->PWMPtr)) {
-		osDelay(100000);
-	}
-
-	if (HAL_OK != HAL_TIM_Base_Start_IT(sHandlePtr->rotInfo->encPtr)) {
-		osDelay(100000);
-	}
-
-	if (HAL_OK != HAL_TIM_Encoder_Start_IT(sHandlePtr->rotInfo->encPtr, TIM_CHANNEL_ALL)) {
-		osDelay(100000);
-	}
-
-	if (HAL_OK != HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL)) {
+	if (HAL_OK != HAL_TIM_Base_Start(sHandlePtr->rotInfo->PWMPtr)) {
 		osDelay(100000);
 	}
 
 	if (HAL_OK != HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL)) {
+		osDelay(100000);
+	}
+
+	if (HAL_OK != HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL)) {
 		osDelay(100000);
 	}
 
@@ -174,29 +160,29 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 	__HAL_TIM_SET_AUTORELOAD(sHandlePtr->rotInfo->PWMStopPtr, steps-1);
 
 	osDelay(1);
-	qwerty = HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
 	qwerty = HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
+	qwerty = HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
 
 }
 
-void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float angle) {
-	/*
-	 * Moves stepper motor to an absolute angle, measured by the encoder
-	 * */
-
-	// Clip angle between min and max
-//	float ang = (angle > sHandlePtr->rotInfo->minAngle) ? angle : sHandlePtr->rotInfo->minAngle;
-//	ang = (angle < sHandlePtr->rotInfo->maxAngle) ? ang : sHandlePtr->rotInfo->maxAngle;
-
-	// Get angle requirement: desired - actual
-	float currentAngle = numOfRevolutions*360.0 + (float) (sHandlePtr->rotInfo->encPulses % (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4));
-	float angReq = angle - currentAngle;
-
-//	int16_t angReq = angle - sHandlePtr->rotInfo->encPulses / (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4);
-
-	// Move relative angle
-	DRV_move_angle_rel_OL(sHandlePtr, angReq);
-}
+//void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float angle) {
+//	/*
+//	 * Moves stepper motor to an absolute angle, measured by the encoder
+//	 * */
+//
+//	// Clip angle between min and max
+////	float ang = (angle > sHandlePtr->rotInfo->minAngle) ? angle : sHandlePtr->rotInfo->minAngle;
+////	ang = (angle < sHandlePtr->rotInfo->maxAngle) ? ang : sHandlePtr->rotInfo->maxAngle;
+//
+//	// Get angle requirement: desired - actual
+//	float currentAngle = numOfRevolutions*360.0 + (float) (sHandlePtr->rotInfo->encPulses % (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4));
+//	float angReq = angle - currentAngle;
+//
+////	int16_t angReq = angle - sHandlePtr->rotInfo->encPulses / (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4);
+//
+//	// Move relative angle
+//	DRV_move_angle_rel_OL(sHandlePtr, angReq);
+//}
 
 void DRV_move_angle_rel_OL(stepperHandle_t* sHandlePtr, float relAngle) {
 	/*
@@ -254,22 +240,8 @@ void DRV_set_pulse_freq(stepperHandle_t* sHandlePtr, uint16_t pulseFreq) {
     /* Restart the timer */
     HAL_TIM_Base_Start(sHandlePtr->rotInfo->PWMPtr);
     HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
-}
 
-void DRV_update_angular_pos(stepperHandle_t* sHandlePtr) {
-	  // Get encoder
-	  uint32_t currentEnc = sHandlePtr->rotInfo->encPtr->Instance->CNT;
-
-	  // Get absolute angular position
-	  if (numOfRevolutions > 0) {
-		  sHandlePtr->rotInfo->encPulses = (int16_t) (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4 * numOfRevolutions + currentEnc);
-	  }
-	  else if (numOfRevolutions < 0) {
-		  sHandlePtr->rotInfo->encPulses = (int16_t) sHandlePtr->rotInfo->encPtr->Instance->ARR * -4 * numOfRevolutions - (int16_t) (sHandlePtr->rotInfo->encPtr->Instance->ARR - currentEnc);
-	  }
-	  else {
-		  sHandlePtr->rotInfo->encPulses = (int16_t) currentEnc;
-	  }
+    sHandlePtr->rotInfo->pulseFreq = pulseFreq;
 }
 
 //void DRV_retract_full(void) {
