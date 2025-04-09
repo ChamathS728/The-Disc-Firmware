@@ -15,6 +15,7 @@ typedef struct {
     float Kp;   // Proportional gain
     float Ki;   // Integral gain
     float Kd;	// Derivative gain
+    float Tt;	// Tracking time constant
 
     // State variables
     float integral;		// Accumulated integral
@@ -32,5 +33,6 @@ typedef struct {
 } PIDController_t;
 
 float PID_Update(PIDController_t* pid, float error);
+float PID_Update_old(PIDController_t* pid, float error);
 
 #endif /* INC_PID_H_ */

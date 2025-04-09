@@ -120,8 +120,6 @@ void DRV_microstep_config(stepperHandle_t* sHandlePtr, eMicrostepMode microstepS
 
 			sHandlePtr->rotInfo->driveRes = REV_32;
 			break;
-//		default:
-//			__NOP();
 	}
 }
 void DRV_movement_config(stepperHandle_t* sHandlePtr, eMovementProfile profile);

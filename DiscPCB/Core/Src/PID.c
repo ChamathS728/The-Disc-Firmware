@@ -46,6 +46,44 @@ float PID_Update(PIDController_t* pid, float error)
     // Compute total output
     float output = P + I + D;
 
+    float output_sat = output;
+
+    // Clamp output
+    if (output_sat > pid->output_max) {
+    	output_sat = pid->output_max;
+    } else if (output_sat < pid->output_min) {
+    	output_sat = pid->output_min;
+    } else {
+        // Only allow integral to grow when output is not clamped
+        pid->integral = pid->integral;  // No change needed, just for clarity
+    }
+
+    // Apply back-calculation to wind down integral term
+    pid->integral += (output_sat - output)/pid->Tt;
+
+    // Save error for next derivative calculation
+    pid->prev_error = error;
+
+    return output_sat;
+}
+
+float PID_Update_old(PIDController_t* pid, float error)
+{
+    // Proportional term
+    float P = pid->Kp * error;
+
+    // Integral term with anti-windup
+    pid->integral += error * pid->dt;
+    float I = pid->Ki * pid->integral;
+
+    // Derivative term with optional filtering
+    float derivative_raw = (error - pid->prev_error) / pid->dt;
+    pid->derivative = pid->alpha * pid->derivative + (1.0f - pid->alpha) * derivative_raw;
+    float D = pid->Kd * pid->derivative;
+
+    // Compute total output
+    float output = P + I + D;
+
     // Clamp output
     if (output > pid->output_max) {
         output = pid->output_max;

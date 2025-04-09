@@ -68,8 +68,8 @@ all: main-build
 main-build: DiscPCB.elf secondary-outputs
 
 # Tool invocations
-DiscPCB.elf DiscPCB.map: $(OBJS) $(USER_OBJS) C:\Users\chama\STM32CubeIDE\workspace_1.16.1\The-Disc-Firmware\DiscPCB\STM32G431CBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "DiscPCB.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\chama\STM32CubeIDE\workspace_1.16.1\The-Disc-Firmware\DiscPCB\STM32G431CBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="DiscPCB.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
+DiscPCB.elf DiscPCB.map: $(OBJS) $(USER_OBJS) C:\Users\chama\STM32CubeIDE\workspace_1.16.1\HPR\The-Disc-Firmware\DiscPCB\STM32G431CBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "DiscPCB.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\chama\STM32CubeIDE\workspace_1.16.1\HPR\The-Disc-Firmware\DiscPCB\STM32G431CBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="DiscPCB.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

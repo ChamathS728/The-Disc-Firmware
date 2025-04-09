@@ -23,7 +23,7 @@
 ../Core/Src/main.c:1019:6:strelkaCommsFn	1
 ../Core/Src/main.c:1063:6:powerSenseFn	1
 ../Core/Src/main.c:1104:6:stepperCtrlFn	3
-../Core/Src/main.c:1285:6:stateMachineFn	1
-../Core/Src/main.c:1328:6:sampleEncoderFn	2
-../Core/Src/main.c:1377:6:HAL_TIM_PeriodElapsedCallback	5
-../Core/Src/main.c:1413:6:Error_Handler	1
+../Core/Src/main.c:1261:6:stateMachineFn	1
+../Core/Src/main.c:1304:6:sampleEncoderFn	2
+../Core/Src/main.c:1353:6:HAL_TIM_PeriodElapsedCallback	5
+../Core/Src/main.c:1389:6:Error_Handler	1

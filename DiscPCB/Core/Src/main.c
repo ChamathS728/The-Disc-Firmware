@@ -1168,22 +1168,24 @@ void stepperCtrlFn(void *argument)
 //	DRV_sleep(mtrHandle);
 
 	// Set up control loop parameters
-	float Kp = 0.05;
-	float Ki = 0.005;
-	float Kd = 0.0;
+	float Kp = 0.5;
+	float Ki = 0.05;
+	float Kd = 0.01;
 	float dt = 0.01;
+	float Tt = 2;
 
 	// Constant output max/min for a fixed speed/microstep resolution
 	float output_min = (float) mtrHandle->rotInfo->pulseFreq * -dt;
 	float output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
 
-	float alpha = 1;
-	float setpoint = 180.0; // Positive here means clockwise ;-;
+	float alpha = 0.9;
+	float setpoint = 720.0; // Positive here means clockwise ;-;
 
 	PIDController_t PID = {
 		.Kp = Kp,
 		.Ki = Ki,
 		.Kd = Kd,
+		.Tt = Tt,
 		.dt = dt,
 		.output_min = output_min,
 		.output_max = output_max,
@@ -1208,23 +1210,17 @@ void stepperCtrlFn(void *argument)
 	  float error = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
 //	  float error = discStatus.targetPosition - discStatus.currentPosition;
 
-	  float blah = PID_Update(&PID, error);
-
-//	   Apparently this needs to be there
 //	  if (currentPrintTime - lastPrintTime > 500) {
 //		  sprintf(printBuff, "%.2f, %.2f\n", error, blah);
 //		  printf(printBuff);
 //		  lastPrintTime = millis();
 //	  }
-//	  osDelay(500);
 
-	  // FIXME: Add anti-windup structure
-	  // FIXME: Add derivative filtering
 	  // FIXME: Add DRV_stop_steps function
 	  if (error > deadband || error < -deadband) {
 		  // Run PID controller -> outputs velocity in deg/s
+		  //float outPID = PID_Update_old(&PID, error) * PID.dt;
 		  float outPID = PID_Update(&PID, error) * PID.dt;
-
 //		  if (outPID > 0) {
 //			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
 //		  }
@@ -1237,39 +1233,17 @@ void stepperCtrlFn(void *argument)
 
 	  }
 	  else {
-//		  DRV_sleep(mtrHandle);
+		  DRV_sleep(mtrHandle);
 //		  DRV_move_angle_rel_OL(mtrHandle, 0);
+
+		  // Stop moving hopefully
+//		  DRV_move_steps(mtrHandle, 1, 0);
 
 		  // Now that it's close enough, fill the TX buffer with an acknowledgement
 		  uint32_t acknowledgePacket = 0x23;
 		  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
 	  }
 
-
-//	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-//	  if (HAL_GPIO_ReadPin(MTR_NFLT_GPIO_Port, MTR_NFLT_Pin) == GPIO_PIN_SET) {
-//		  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-//	  }
-//	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-//	  HAL_GPIO_TogglePin(ERROR_LED_GPIO_Port, ERROR_LED_Pin);
-//	  vTaskSuspendAll();
-//	  DRV_move_steps(blah, 0, 0);
-//	  xTaskResumeAll();
-//	  DRV_move_steps(mtrHandle, 40000, 1); // 1 means anticlockwise as of 31/01/25
-//	  uint32_t encoderVal = mtrHandle->rotInfo->encPtr->Instance->CNT;
-//	  char buff[64];
-//	  sprintf(buff, "%ld\n",encoderVal);
-//	  printf(buff);
-//
-//	  osDelay(2000);
-//	  DRV_move_steps(mtrHandle, 40000, 0);
-//	  encoderVal = mtrHandle->rotInfo->encPtr->Instance->CNT;
-//	  sprintf(buff, "%ld\n",encoderVal);
-//	  printf(buff);
-//
-//	  osDelay(2000);
-
-//    osDelay((int) PID.dt);
 	  osDelay(10);
   }
   /* USER CODE END stepperCtrlFn */
