@@ -58,6 +58,17 @@ void DRV_wakeup(stepperHandle_t* sHandlePtr) {
 	osDelay(1);
 
 }
+
+void DRV_enable(stepperHandle_t* sHandlePtr) {
+	// Drive enable pin low to enable outputs and read STEP inputs
+	HAL_GPIO_WritePin(sHandlePtr->IO->nEnablePort, sHandlePtr->IO->nEnablePin, GPIO_PIN_RESET);
+}
+
+void DRV_disable(stepperHandle_t* sHandlePtr) {
+	// Drive enable pin high to disable outputs and ignore STEP inputs
+	HAL_GPIO_WritePin(sHandlePtr->IO->nEnablePort, sHandlePtr->IO->nEnablePin, GPIO_PIN_SET);
+}
+
 void DRV_microstep_config(stepperHandle_t* sHandlePtr, eMicrostepMode microstepSetting) {
 	sHandlePtr->cfg->stepRes = microstepSetting;
 	switch (microstepSetting) {
@@ -142,19 +153,34 @@ void DRV_start(stepperHandle_t* sHandlePtr) {
 void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 	// Set direction
 	switch (dir) {
-		case 0:
+		case 0: // Clockwise rotation
 			HAL_GPIO_WritePin(sHandlePtr->IO->dirPort, sHandlePtr->IO->dirPin, GPIO_PIN_RESET);
-			sHandlePtr->cfg->stepperDir = 0;
+			sHandlePtr->cfg->stepperDir = CLOCKWISE;
 			break;
-		case 1:
+		case 1: // Anticlockwise rotation
 			HAL_GPIO_WritePin(sHandlePtr->IO->dirPort, sHandlePtr->IO->dirPin, GPIO_PIN_SET);
-			sHandlePtr->cfg->stepperDir = 1;
+			sHandlePtr->cfg->stepperDir = ANTICLOCKWISE;
 			break;
 	}
 
-	// Start PWM timer, it should be stopped in PeriodElapsedCallback in main.c
+	// Stop PWM timer, it should be stopped in PeriodElapsedCallback in main.c
 	HAL_StatusTypeDef qwerty = HAL_TIM_PWM_Stop(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
 	qwerty = HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
+
+	// If abs(steps) < 1
+//	if (steps < 2) {
+//		// Stop the timers outright
+//		qwerty = HAL_TIM_PWM_Stop(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
+//		qwerty = HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
+//	}
+//	else {
+//		// Configure ARR of PWMStopTimer to match steps
+//		__HAL_TIM_SET_AUTORELOAD(sHandlePtr->rotInfo->PWMStopPtr, steps-1);
+//
+//		osDelay(1);
+//		qwerty = HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
+//		qwerty = HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
+//	}
 
 	// Configure ARR of PWMStopTimer to match steps
 	__HAL_TIM_SET_AUTORELOAD(sHandlePtr->rotInfo->PWMStopPtr, steps-1);

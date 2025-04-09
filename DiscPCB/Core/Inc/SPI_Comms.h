@@ -23,7 +23,7 @@
 #define PACKET_SIZE_STRELKA_RX		13
 
 // Define this buffer within main.c to be used in SPI Receive IT/DMA calls
-extern uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
+extern uint8_t rxDiscSPI[8];
 extern DeviceStatus_t discStatus;
 
 typedef struct {

@@ -30,6 +30,7 @@
 #include "SPI_Comms.h"
 #include "PID.h"
 #include "encoder.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,6 +66,8 @@ CORDIC_HandleTypeDef hcordic;
 
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
+DMA_HandleTypeDef hdma_spi2_tx;
+DMA_HandleTypeDef hdma_spi2_rx;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -146,8 +149,11 @@ void stateMachineFn(void *argument);
 void sampleEncoderFn(void *argument);
 
 /* USER CODE BEGIN PFP */
-uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
-uint8_t txDiscSPI[PACKET_SIZE_STRELKA_RX];
+//uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
+//uint8_t txDiscSPI[PACKET_SIZE_STRELKA_RX];
+
+uint8_t rxDiscSPI[8];
+uint8_t txDiscSPI[8];
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -247,7 +253,20 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
 }
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
-	printf(rxBuff);
+	// Grab data from the rxBuffer
+// 	uint32_t rxData = (uint32_t) rxDiscSPI; // May not work
+	uint32_t rxData;
+ 	memcpy(&rxData, rxDiscSPI, sizeof(rxDiscSPI));
+
+	if (rxData == 90) {
+		// Set target position to 90
+		discStatus.targetPosition = (float) 90;
+	}
+	else if (rxData == 0) {
+		// Set target position to 90
+		discStatus.targetPosition = (float) 0;
+	}
+//	printf(rxBuff);
 	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 }
 
@@ -889,11 +908,18 @@ static void MX_DMA_Init(void)
   /* DMA controller clock enable */
   __HAL_RCC_DMAMUX1_CLK_ENABLE();
   __HAL_RCC_DMA1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* DMA2_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
+  /* DMA2_Channel2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Channel2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Channel2_IRQn);
 
 }
 
@@ -997,20 +1023,31 @@ void strelkaCommsFn(void *argument)
   /* USER CODE BEGIN 5 */
 
   // Initialise buffers
-//  uint8_t txBuff[3] = {"a", "b", "\n"};
-//  uint8_t rxBuff[3];
 
-  // Start off receive with interrupts
-  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
+//  uint32_t strelkaNumber = 90;
+//  txBuff[0] = (strelkaNumber >> 24) & 0xFF;
+//  txBuff[1] = (strelkaNumber >> 16) & 0xFF;
+//  txBuff[2] = (strelkaNumber >> 8) & 0xFF;
+//  txBuff[3] = strelkaNumber & 0xFF;
 
-  // Send initial message
-  HAL_SPI_Transmit_IT(StrelkaV2SPI, txBuff, 3);
+  // Fill TX buffer with something
+  uint32_t acknowledgePacket = 0x11;
+  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
+
+  // Start an initial transmitreceive
+  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
+
+//  // Start off receive with interrupts
+//  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
+//
+//  // Send initial message
+//  HAL_SPI_Transmit_IT(StrelkaV2SPI, txBuff, 3);
 
   /* Infinite loop */
   for(;;)
   {
 //	  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
-	  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
+//	  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
     osDelay(100);
   }
   /* USER CODE END 5 */
@@ -1118,11 +1155,9 @@ void stepperCtrlFn(void *argument)
 	DRV_start(mtrHandle);
 //	__HAL_TIM_SET_PRESCALER(mtrHandle->rotInfo->PWMPtr, 8);
 	DRV_microstep_config(mtrHandle, MICROSTEP_32);
-	DRV_set_pulse_freq(mtrHandle, 800);
+	DRV_set_pulse_freq(mtrHandle, 16000);
 
 
-//	DRV_move_angle_rel_OL(mtrHandle, 360.0);
-//	osDelay(6000);
 //	DRV_move_angle_rel_OL(mtrHandle, -270.0);
 //	osDelay(6000);
 
@@ -1134,7 +1169,7 @@ void stepperCtrlFn(void *argument)
 
 	// Set up control loop parameters
 	float Kp = 0.05;
-	float Ki = 0.001;
+	float Ki = 0.005;
 	float Kd = 0.0;
 	float dt = 0.01;
 
@@ -1143,7 +1178,7 @@ void stepperCtrlFn(void *argument)
 	float output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
 
 	float alpha = 1;
-	float setpoint = 180.0;
+	float setpoint = 180.0; // Positive here means clockwise ;-;
 
 	PIDController_t PID = {
 		.Kp = Kp,
@@ -1162,8 +1197,9 @@ void stepperCtrlFn(void *argument)
 
 	float deadband = 1.0f;
 
-	float lastPrintTime = millis();
-	uint8_t printBuff[64];
+	uint16_t lastPrintTime = millis();
+	uint16_t currentPrintTime = millis();
+//	uint8_t printBuff[64];
 
   for(;;)
   {
@@ -1174,31 +1210,39 @@ void stepperCtrlFn(void *argument)
 
 	  float blah = PID_Update(&PID, error);
 
-	  if (millis() - lastPrintTime > 500) {
-		  sprintf(printBuff, "%.2f, %.2f\n", error, blah);
-		  printf(printBuff);
-		  lastPrintTime = millis();
-	  }
+//	   Apparently this needs to be there
+//	  if (currentPrintTime - lastPrintTime > 500) {
+//		  sprintf(printBuff, "%.2f, %.2f\n", error, blah);
+//		  printf(printBuff);
+//		  lastPrintTime = millis();
+//	  }
+//	  osDelay(500);
 
-
+	  // FIXME: Add anti-windup structure
+	  // FIXME: Add derivative filtering
+	  // FIXME: Add DRV_stop_steps function
 	  if (error > deadband || error < -deadband) {
 		  // Run PID controller -> outputs velocity in deg/s
 		  float outPID = PID_Update(&PID, error) * PID.dt;
 
-		  if (outPID > 0) {
-			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
-		  }
-		  else {
-			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
-		  }
+//		  if (outPID > 0) {
+//			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
+//		  }
+//		  else {
+//			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+//		  }
 
 		  // Get number of steps for this iteration of the control loop
 		  DRV_move_angle_rel_OL(mtrHandle, outPID);
 
 	  }
 	  else {
-		  DRV_sleep(mtrHandle);
+//		  DRV_sleep(mtrHandle);
 //		  DRV_move_angle_rel_OL(mtrHandle, 0);
+
+		  // Now that it's close enough, fill the TX buffer with an acknowledgement
+		  uint32_t acknowledgePacket = 0x23;
+		  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
 	  }
 
 
@@ -1298,6 +1342,7 @@ void sampleEncoderFn(void *argument)
   /* Infinite loop */
   for(;;)
   {
+	  // Calculate dt for this iteration
 	  dt = currentTime - previousTime;
 
 	  if (dt > ENC_SAMPLE_TIME_MS) {
@@ -1314,6 +1359,8 @@ void sampleEncoderFn(void *argument)
 	  }
 
 	  currentTime = millis();
+
+	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
     osDelay(1);
   }
   /* USER CODE END sampleEncoderFn */

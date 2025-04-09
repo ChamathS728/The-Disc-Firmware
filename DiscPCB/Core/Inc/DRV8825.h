@@ -12,7 +12,8 @@
 
 #define STEPPER_CHANNEL TIM_CHANNEL_1
 #define STEPPER_STOP_CHANNEL TIM_CHANNEL_1
-
+#define CLOCKWISE 0
+#define ANTICLOCKWISE 1
 /* Enums */
 typedef enum {
 	// Binary sequence in M2,M1,M0 order

@@ -1,8 +1,10 @@
 ../Core/Src/DRV8825.c:15:18:DRV_init	1
 ../Core/Src/DRV8825.c:46:6:DRV_sleep	1
 ../Core/Src/DRV8825.c:50:6:DRV_wakeup	1
-../Core/Src/DRV8825.c:61:6:DRV_microstep_config	7
-../Core/Src/DRV8825.c:118:6:DRV_start	5
-../Core/Src/DRV8825.c:142:6:DRV_move_steps	3
-../Core/Src/DRV8825.c:187:6:DRV_move_angle_rel_OL	2
-../Core/Src/DRV8825.c:209:6:DRV_set_pulse_freq	2
+../Core/Src/DRV8825.c:62:6:DRV_enable	1
+../Core/Src/DRV8825.c:67:6:DRV_disable	1
+../Core/Src/DRV8825.c:72:6:DRV_microstep_config	7
+../Core/Src/DRV8825.c:129:6:DRV_start	5
+../Core/Src/DRV8825.c:153:6:DRV_move_steps	3
+../Core/Src/DRV8825.c:213:6:DRV_move_angle_rel_OL	2
+../Core/Src/DRV8825.c:235:6:DRV_set_pulse_freq	2
