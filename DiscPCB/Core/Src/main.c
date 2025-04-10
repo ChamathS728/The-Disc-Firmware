@@ -47,7 +47,7 @@
 #define BUZZ_PSC 9
 #define BUZZ_CHANNEL TIM_CHANNEL_2
 
-#define DEBUGGING 1
+//#define DEBUGGING 1
 
 #define ENC_SAMPLE_TIME_MS 10
 
@@ -211,7 +211,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
 	// Pull header straight from receive buffer
-	PacketHeader_t* header = (PacketHeader_t*) hspi->pRxBuffPtr;
+	PacketHeader_t* header = (PacketHeader_t*) hspi->pRxBuffPtr; // FIXME
 
 	// Get packet type from struct and go through each possibility
 	switch (header->packetType) {
@@ -258,7 +258,7 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 	// Grab data from the rxBuffer
 // 	uint32_t rxData = (uint32_t) rxDiscSPI; // May not work
-	uint32_t rxData;
+	uint64_t rxData;
  	memcpy(&rxData, rxDiscSPI, sizeof(rxDiscSPI));
 
 	if (rxData == 90) {
@@ -270,6 +270,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 		discStatus.targetPosition = (float) 0;
 	}
 //	printf(rxBuff);
+
 	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 }
 
@@ -1224,8 +1225,8 @@ void stepperCtrlFn(void *argument)
 		  justReachedSetpoint = 0;
 #endif
 		  if (mtrHandle->cfg->stepRes != MICROSTEP_2) {
-			DRV_microstep_config(mtrHandle, MICROSTEP_2);
-			DRV_set_pulse_freq(mtrHandle, 800);
+			DRV_microstep_config(mtrHandle, MICROSTEP_1);
+			DRV_set_pulse_freq(mtrHandle, 1000);
 		  }
 
 		  // Run PID controller -> outputs velocity in deg/s
@@ -1261,9 +1262,6 @@ void stepperCtrlFn(void *argument)
 
 //		  DRV_sleep(mtrHandle);
 //		  DRV_move_angle_rel_OL(mtrHandle, 0);
-
-		  // Stop moving hopefully
-//		  DRV_move_steps(mtrHandle, 1, 0);
 
 		  // Now that it's close enough, fill the TX buffer with an acknowledgement
 		  uint32_t acknowledgePacket = 0x23;
