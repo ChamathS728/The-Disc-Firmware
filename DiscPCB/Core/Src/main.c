@@ -47,6 +47,8 @@
 #define BUZZ_PSC 9
 #define BUZZ_CHANNEL TIM_CHANNEL_2
 
+#define DEBUGGING 1
+
 #define ENC_SAMPLE_TIME_MS 10
 
 #define ENC_TICKS_TO_DEG 0.09
@@ -178,6 +180,7 @@ DeviceStatus_t discStatus = {
 
 uint8_t isTargetNew = 1;
 int numOfRevolutions = 0;
+float error = -1;
 
 // Overwrite _write method to use printf for sending to computer
 int _write(int file, char *ptr, int len)
@@ -915,10 +918,10 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA2_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
   /* DMA2_Channel2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Channel2_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA2_Channel2_IRQn);
 
 }
@@ -1155,31 +1158,22 @@ void stepperCtrlFn(void *argument)
 	DRV_start(mtrHandle);
 //	__HAL_TIM_SET_PRESCALER(mtrHandle->rotInfo->PWMPtr, 8);
 	DRV_microstep_config(mtrHandle, MICROSTEP_32);
-	DRV_set_pulse_freq(mtrHandle, 16000);
-
-
-//	DRV_move_angle_rel_OL(mtrHandle, -270.0);
-//	osDelay(6000);
-
-//	DRV_move_steps(mtrHandle, 400, 1); // 1 means anticlockwise as of 31/01/25
-//	osDelay(2000);
-//	DRV_move_steps(mtrHandle, 400, 0);
-//	osDelay(2000);
-//	DRV_sleep(mtrHandle);
+	DRV_set_pulse_freq(mtrHandle, 800);
 
 	// Set up control loop parameters
-	float Kp = 0.5;
-	float Ki = 0.05;
-	float Kd = 0.01;
-	float dt = 0.01;
+	float Kp = 1;
+	float Ki = 0.00;
+	float Kd = 0.00;
 	float Tt = 2;
+
+	const float dt = 0.01;
 
 	// Constant output max/min for a fixed speed/microstep resolution
 	float output_min = (float) mtrHandle->rotInfo->pulseFreq * -dt;
 	float output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
 
 	float alpha = 0.9;
-	float setpoint = 720.0; // Positive here means clockwise ;-;
+	float setpoint = 1800.0; // Positive here means clockwise ;-;
 
 	PIDController_t PID = {
 		.Kp = Kp,
@@ -1197,17 +1191,25 @@ void stepperCtrlFn(void *argument)
 	};
 	discStatus.targetPosition = setpoint;
 
-	float deadband = 1.0f;
+	float deadband = 5.0f;
 
 	uint16_t lastPrintTime = millis();
 	uint16_t currentPrintTime = millis();
+
+#ifdef DEBUGGING
+	uint8_t justReachedSetpoint = 0;
+	uint16_t reachedSetpointTime = millis();
+	uint16_t newTime = millis();
+	uint16_t sleepThreshold = 10000;
+#endif
 //	uint8_t printBuff[64];
 
   for(;;)
   {
 
 	  // Get error based on this
-	  float error = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
+//	  float error = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
+	  error = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
 //	  float error = discStatus.targetPosition - discStatus.currentPosition;
 
 //	  if (currentPrintTime - lastPrintTime > 500) {
@@ -1218,6 +1220,14 @@ void stepperCtrlFn(void *argument)
 
 	  // FIXME: Add DRV_stop_steps function
 	  if (error > deadband || error < -deadband) {
+#ifdef DEBUGGING
+		  justReachedSetpoint = 0;
+#endif
+		  if (mtrHandle->cfg->stepRes != MICROSTEP_2) {
+			DRV_microstep_config(mtrHandle, MICROSTEP_2);
+			DRV_set_pulse_freq(mtrHandle, 800);
+		  }
+
 		  // Run PID controller -> outputs velocity in deg/s
 		  //float outPID = PID_Update_old(&PID, error) * PID.dt;
 		  float outPID = PID_Update(&PID, error) * PID.dt;
@@ -1233,7 +1243,23 @@ void stepperCtrlFn(void *argument)
 
 	  }
 	  else {
-		  DRV_sleep(mtrHandle);
+#ifdef DEBUGGING
+		  if (justReachedSetpoint == 0) {
+			  justReachedSetpoint = 1;
+			  reachedSetpointTime = millis();
+		  }
+
+		  if (newTime - reachedSetpointTime > sleepThreshold) {
+			  DRV_sleep(mtrHandle);
+		  }
+#endif
+
+		  // Close enough, so set microsteps to 32 and drop the speed for
+		  // more holding torque
+		  DRV_microstep_config(mtrHandle, MICROSTEP_32);
+		  DRV_set_pulse_freq(mtrHandle, 200);
+
+//		  DRV_sleep(mtrHandle);
 //		  DRV_move_angle_rel_OL(mtrHandle, 0);
 
 		  // Stop moving hopefully
@@ -1243,7 +1269,9 @@ void stepperCtrlFn(void *argument)
 		  uint32_t acknowledgePacket = 0x23;
 		  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
 	  }
-
+#ifdef DEBUGGING
+	  newTime = millis();
+#endif
 	  osDelay(10);
   }
   /* USER CODE END stepperCtrlFn */
