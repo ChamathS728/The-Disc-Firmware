@@ -47,7 +47,7 @@
 #define BUZZ_PSC 9
 #define BUZZ_CHANNEL TIM_CHANNEL_2
 
-//#define DEBUGGING 1
+#define DEBUGGING 1
 
 #define ENC_SAMPLE_TIME_MS 10
 
@@ -171,6 +171,8 @@ SPI_HandleTypeDef* StrelkaV2SPI = &hspi2;
 uint8_t txBuff[3] = {'x', 'y', 'z'};
 uint8_t rxBuff[3];
 
+uint16_t buffADC[4] = {0,0,0,0};
+
 DeviceStatus_t discStatus = {
 		.currentPosition = 0,
 		.currentTime = 0,
@@ -207,6 +209,9 @@ void USB_CDC_RxHandler(uint8_t* Buf, uint32_t Len)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	osThreadFlagsSet(powerSenseTaskHandle, isADCDone);
+
+//	// Restart ADC
+//	HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 }
 
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
@@ -269,7 +274,6 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 		// Set target position to 90
 		discStatus.targetPosition = (float) 0;
 	}
-//	printf(rxBuff);
 
 	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 }
@@ -483,8 +487,8 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.NbrOfConversion = 4;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T8_TRGO;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc1.Init.OversamplingMode = DISABLE;
@@ -890,7 +894,7 @@ static void MX_TIM8_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim8, &sMasterConfig) != HAL_OK)
@@ -1068,11 +1072,10 @@ void powerSenseFn(void *argument)
 {
   /* USER CODE BEGIN powerSenseFn */
 	// Initialise variables
-	uint16_t buffADC[4] = {0,0,0,0};
-	uint32_t mtr_A_I = 0;
-	uint32_t mtr_B_I = 0;
-	uint32_t batt_V = 0;
-	uint32_t batt_I = 0;
+	uint16_t mtr_A_I = 0;
+	uint16_t mtr_B_I = 0;
+	uint16_t batt_V = 0;
+	uint16_t batt_I = 0;
 
 	// Start up ADCs
 	HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
@@ -1089,8 +1092,9 @@ void powerSenseFn(void *argument)
 //		  sprintf(blah, "%d,%d,%d,%d\n",buffADC[0],buffADC[1],buffADC[2],buffADC[3]);
 //		  printf(blah);
 
-	  // Restart ADC
-	  HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
+	  batt_V = buffADC[2];
+
+
 
 	  // Convert data from each channel to actual units
     osDelay(100);
@@ -1174,7 +1178,7 @@ void stepperCtrlFn(void *argument)
 	float output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
 
 	float alpha = 0.9;
-	float setpoint = 1800.0; // Positive here means clockwise ;-;
+	float setpoint = 360.0; // Positive here means clockwise ;-;
 
 	PIDController_t PID = {
 		.Kp = Kp,
