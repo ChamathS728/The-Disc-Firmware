@@ -15,6 +15,8 @@ typedef struct encoderHandle {
 	int32_t totalPulses;
 
 	float pulseVel;
+
+	float alpha; 		// exp filter coefficient
 } encoderHandle_t;
 
 void encoderStart(encoderHandle_t* encoderHandle, uint16_t encPPR, uint16_t gearRatio);

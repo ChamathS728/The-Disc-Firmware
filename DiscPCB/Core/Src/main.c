@@ -175,14 +175,17 @@ uint16_t buffADC[4] = {0,0,0,0};
 
 DeviceStatus_t discStatus = {
 		.currentPosition = 0,
+		.currentVelocity = 0,
 		.currentTime = 0,
 		.targetPosition = 0,
+		.targetVelocity = 0,
 		.isMoving = 0
 };
 
 uint8_t isTargetNew = 1;
 int numOfRevolutions = 0;
-float error = -1;
+float errorPosition = -1;
+float errorVelocity = -1;
 
 // Overwrite _write method to use printf for sending to computer
 int _write(int file, char *ptr, int len)
@@ -1166,37 +1169,67 @@ void stepperCtrlFn(void *argument)
 	DRV_set_pulse_freq(mtrHandle, 800);
 
 	// Set up control loop parameters
-	float Kp = 1;
-	float Ki = 0.00;
-	float Kd = 0.00;
-	float Tt = 2;
+	float pos_Kp = 1;
+	float pos_Ki = 0.00;
+	float pos_Kd = 0.00;
+	float pos_Tt = 2;
 
 	const float dt = 0.01;
 
 	// Constant output max/min for a fixed speed/microstep resolution
-	float output_min = (float) mtrHandle->rotInfo->pulseFreq * -dt;
-	float output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
+	float pos_output_min = (float) mtrHandle->rotInfo->pulseFreq * -dt;
+	float pos_output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
 
-	float alpha = 0.9;
-	float setpoint = 360.0; // Positive here means clockwise ;-;
+	float pos_alpha = 0.9;
+	float pos_setpoint = 360.0; // Positive here means clockwise ;-;
+	float pos_deadband = 5.0f;
+	discStatus.targetPosition = pos_setpoint;
 
-	PIDController_t PID = {
-		.Kp = Kp,
-		.Ki = Ki,
-		.Kd = Kd,
-		.Tt = Tt,
+	PIDController_t PID_Position = {
+		.Kp = pos_Kp,
+		.Ki = pos_Ki,
+		.Kd = pos_Kd,
+		.Tt = pos_Tt,
 		.dt = dt,
-		.output_min = output_min,
-		.output_max = output_max,
-		.alpha = alpha,
+		.output_min = pos_output_min,
+		.output_max = pos_output_max,
+		.alpha = pos_alpha,
 		.integral = 0.0f,
 		.prev_error = 0.0f,
 		.derivative = 0.0f,
-		.setpoint = setpoint
+		.setpoint = pos_setpoint
 	};
-	discStatus.targetPosition = setpoint;
 
-	float deadband = 5.0f;
+	// Set up control loop parameters
+	float vel_Kp = 5;
+	float vel_Ki = 0.5;
+	float vel_Kd = 0.00;
+	float vel_Tt = 2;
+
+	// Constant output max/min for a fixed speed/microstep resolution
+	float vel_output_min = -10000.0;
+	float vel_output_max = 10000.0;
+
+	float vel_alpha = 0.9;
+	float vel_setpoint = 30.0; // Positive here means clockwise ;-;
+	float vel_deadband = 5.0f;
+	discStatus.targetVelocity= vel_setpoint;
+
+	PIDController_t PID_Velocity = {
+		.Kp = vel_Kp,
+		.Ki = vel_Ki,
+		.Kd = vel_Kd,
+		.Tt = vel_Tt,
+		.dt = dt,
+		.output_min = vel_output_min,
+		.output_max = vel_output_max,
+		.alpha = vel_alpha,
+		.integral = 0.0f,
+		.prev_error = 0.0f,
+		.derivative = 0.0f,
+		.setpoint = pos_setpoint
+	};
+
 
 	uint16_t lastPrintTime = millis();
 	uint16_t currentPrintTime = millis();
@@ -1213,38 +1246,32 @@ void stepperCtrlFn(void *argument)
   {
 
 	  // Get error based on this
-//	  float error = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
-	  error = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
-//	  float error = discStatus.targetPosition - discStatus.currentPosition;
+//	  float errorPosition = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
+	  errorPosition = discStatus.currentPosition - discStatus.targetPosition; // +ve setpoint
+//	  float errorPosition = discStatus.targetPosition - discStatus.currentPosition;
 
 //	  if (currentPrintTime - lastPrintTime > 500) {
-//		  sprintf(printBuff, "%.2f, %.2f\n", error, blah);
+//		  sprintf(printBuff, "%.2f, %.2f\n", errorPosition, blah);
 //		  printf(printBuff);
 //		  lastPrintTime = millis();
 //	  }
 
-	  // FIXME: Add DRV_stop_steps function
-	  if (error > deadband || error < -deadband) {
+	  if (errorPosition > pos_deadband || errorPosition < -pos_deadband) {
 #ifdef DEBUGGING
 		  justReachedSetpoint = 0;
 #endif
-		  if (mtrHandle->cfg->stepRes != MICROSTEP_2) {
-			DRV_microstep_config(mtrHandle, MICROSTEP_1);
-			DRV_set_pulse_freq(mtrHandle, 1000);
-		  }
 
 		  // Run PID controller -> outputs velocity in deg/s
-		  //float outPID = PID_Update_old(&PID, error) * PID.dt;
-		  float outPID = PID_Update(&PID, error) * PID.dt;
-//		  if (outPID > 0) {
-//			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
-//		  }
-//		  else {
-//			  HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
-//		  }
+		  discStatus.targetVelocity = PID_Update(&PID_Position, errorPosition);
 
-		  // Get number of steps for this iteration of the control loop
-		  DRV_move_angle_rel_OL(mtrHandle, outPID);
+		  // Get velocity error as well
+		  errorVelocity = discStatus.currentVelocity - discStatus.targetVelocity;
+
+		  // Run PID controller for new velocity command
+		  float outPID = PID_Update(&PID_Velocity, errorVelocity);
+
+		  // Set the freerun velocity
+		  DRV_freerun(mtrHandle, outPID);
 
 	  }
 	  else {
@@ -1335,7 +1362,8 @@ void sampleEncoderFn(void *argument)
 	encoderHandle_t eHandlePtr = {
 			.encTimer = EncoderTimer,
 			.pulseVel = 0.0f,
-			.totalPulses = 0.
+			.totalPulses = 0.0f,
+			.alpha = 0.5
 	};
 
 	encoderStart(&eHandlePtr, 1000, 1);
@@ -1353,8 +1381,9 @@ void sampleEncoderFn(void *argument)
 		  // Read from encoder
 		  sampleEncoder(&eHandlePtr, dt/1E3);
 
-		  // Update the current position
+		  // Update the current position and velocity
 		  discStatus.currentPosition = eHandlePtr.totalPulses * ENC_TICKS_TO_DEG;
+		  discStatus.currentVelocity = eHandlePtr.pulseVel * ENC_TICKS_TO_DEG;
 
 //		  // Add it to the queue - message priority ignored
 //		  osMessageQueuePut(timEncoderHandle, &currentEncoder, 0, osWaitForever);

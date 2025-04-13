@@ -132,8 +132,8 @@ void DRV_movement_config(stepperHandle_t* stepperHandlePtr, eMovementProfile pro
 void DRV_set_pulse_freq(stepperHandle_t* stepperHandlePtr, uint16_t pulseFreq);
 
 void DRV_start(stepperHandle_t* stepperHandlePtr);
+void DRV_freerun(stepperHandle_t* sHandlePtr, float speed);
 void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir);
-void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float absAngle);
 void DRV_move_angle_rel_OL(stepperHandle_t* sHandlePtr, float relAngle);
 void DRV_set_pulse_freq(stepperHandle_t* sHandlePtr, uint16_t pulseFreq);
 void DRV_retract_full(void);

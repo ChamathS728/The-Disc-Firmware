@@ -38,11 +38,7 @@ stepperHandle_t* DRV_init(stepperConfig_t* sCfgPtr, stepperIO_t* sIOPtr, stepper
 
 	return sHandle;
 }
-//void DRV_deinit(stepperHandle_t* sHandlePtr) {
-//	//
-//
-//	__NOP();
-//}
+
 void DRV_sleep(stepperHandle_t* sHandlePtr) {
 	// Pull sleep pin low to sleep the device
 	HAL_GPIO_WritePin(sHandlePtr->IO->nSleepPort, sHandlePtr->IO->nSleepPin, GPIO_PIN_RESET);
@@ -148,6 +144,46 @@ void DRV_start(stepperHandle_t* sHandlePtr) {
 	}
 
 }
+
+void DRV_freerun(stepperHandle_t* sHandlePtr, float speed) {
+	/*
+	 * Runs the stepper motor continuously at a set speed (deg/s)
+	 *
+	 * speed parameter should be in deg/s
+	 * */
+
+	// Stop the PWM and PWMStop timers
+	HAL_TIM_PWM_Stop(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
+	HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
+
+	// Convert deg/s to steps/s
+	uint8_t dir = CLOCKWISE;
+	if (speed >= 0) {
+		dir = ANTICLOCKWISE;
+	}
+	else {
+		speed *= -1;
+	}
+	// Set direction
+	switch (dir) {
+		case 0: // Clockwise rotation
+			HAL_GPIO_WritePin(sHandlePtr->IO->dirPort, sHandlePtr->IO->dirPin, GPIO_PIN_RESET);
+			sHandlePtr->cfg->stepperDir = CLOCKWISE;
+			break;
+		case 1: // Anticlockwise rotation
+			HAL_GPIO_WritePin(sHandlePtr->IO->dirPort, sHandlePtr->IO->dirPin, GPIO_PIN_SET);
+			sHandlePtr->cfg->stepperDir = ANTICLOCKWISE;
+			break;
+	}
+
+	uint16_t speed_s = (uint16_t) (speed * sHandlePtr->rotInfo->driveRes/360.0);
+
+	// Set pulse frequency and run
+	DRV_set_pulse_freq(sHandlePtr, speed_s);
+
+	__NOP();
+}
+
 void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 	// Set direction
 	switch (dir) {
@@ -165,21 +201,6 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 	HAL_StatusTypeDef qwerty = HAL_TIM_PWM_Stop(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
 	qwerty = HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
 
-	// If abs(steps) < 1
-//	if (steps < 2) {
-//		// Stop the timers outright
-//		qwerty = HAL_TIM_PWM_Stop(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
-//		qwerty = HAL_TIM_IC_Stop_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
-//	}
-//	else {
-//		// Configure ARR of PWMStopTimer to match steps
-//		__HAL_TIM_SET_AUTORELOAD(sHandlePtr->rotInfo->PWMStopPtr, steps-1);
-//
-//		osDelay(1);
-//		qwerty = HAL_TIM_IC_Start_IT(sHandlePtr->rotInfo->PWMStopPtr, STEPPER_STOP_CHANNEL);
-//		qwerty = HAL_TIM_PWM_Start(sHandlePtr->rotInfo->PWMPtr, STEPPER_CHANNEL);
-//	}
-
 	// Configure ARR of PWMStopTimer to match steps
 	__HAL_TIM_SET_AUTORELOAD(sHandlePtr->rotInfo->PWMStopPtr, steps-1);
 
@@ -189,24 +210,6 @@ void DRV_move_steps(stepperHandle_t* sHandlePtr, uint16_t steps, uint8_t dir) {
 
 }
 
-//void DRV_move_angle_abs_OL(stepperHandle_t* sHandlePtr, float angle) {
-//	/*
-//	 * Moves stepper motor to an absolute angle, measured by the encoder
-//	 * */
-//
-//	// Clip angle between min and max
-////	float ang = (angle > sHandlePtr->rotInfo->minAngle) ? angle : sHandlePtr->rotInfo->minAngle;
-////	ang = (angle < sHandlePtr->rotInfo->maxAngle) ? ang : sHandlePtr->rotInfo->maxAngle;
-//
-//	// Get angle requirement: desired - actual
-//	float currentAngle = numOfRevolutions*360.0 + (float) (sHandlePtr->rotInfo->encPulses % (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4));
-//	float angReq = angle - currentAngle;
-//
-////	int16_t angReq = angle - sHandlePtr->rotInfo->encPulses / (sHandlePtr->rotInfo->encPtr->Instance->ARR * 4);
-//
-//	// Move relative angle
-//	DRV_move_angle_rel_OL(sHandlePtr, angReq);
-//}
 
 void DRV_move_angle_rel_OL(stepperHandle_t* sHandlePtr, float relAngle) {
 	/*
@@ -217,9 +220,9 @@ void DRV_move_angle_rel_OL(stepperHandle_t* sHandlePtr, float relAngle) {
 	 * */
 
 	// Get direction and number of steps required based on microstep config
-	uint8_t dir = 0;
+	uint8_t dir = CLOCKWISE;
 	if (relAngle >= 0) {
-		dir = 1;
+		dir = ANTICLOCKWISE;
 	}
 	else {
 		relAngle *= -1;
@@ -268,10 +271,4 @@ void DRV_set_pulse_freq(stepperHandle_t* sHandlePtr, uint16_t pulseFreq) {
     sHandlePtr->rotInfo->pulseFreq = pulseFreq;
 }
 
-//void DRV_retract_full(void) {
-//	//
-//}
-//void DRV_extend_full(void) {
-//	//
-//}
 
