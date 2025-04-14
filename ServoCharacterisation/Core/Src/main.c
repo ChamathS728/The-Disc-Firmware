@@ -18,10 +18,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "encoder.h"
+#include "ServoControl.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,9 +43,36 @@
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim8;
 TIM_HandleTypeDef htim15;
 
+/* Definitions for sampleEncoder */
+osThreadId_t sampleEncoderHandle;
+const osThreadAttr_t sampleEncoder_attributes = {
+  .name = "sampleEncoder",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 128 * 4
+};
+/* Definitions for servoCmd */
+osThreadId_t servoCmdHandle;
+const osThreadAttr_t servoCmd_attributes = {
+  .name = "servoCmd",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 128 * 4
+};
+/* Definitions for logData */
+osThreadId_t logDataHandle;
+const osThreadAttr_t logData_attributes = {
+  .name = "logData",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 128 * 4
+};
 /* USER CODE BEGIN PV */
+TIM_HandleTypeDef* EncoderTimer = &htim1;
+TIM_HandleTypeDef* ServoTimer = &htim15;
+TIM_HandleTypeDef* MicrosTimer = &htim2;
+TIM_HandleTypeDef* MillisTimer = &htim8;
 
 /* USER CODE END PV */
 
@@ -52,8 +81,20 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM15_Init(void);
-/* USER CODE BEGIN PFP */
+static void MX_TIM2_Init(void);
+static void MX_TIM8_Init(void);
+void sampleEncoderFn(void *argument);
+void servoCmdFn(void *argument);
+void logDataFn(void *argument);
 
+/* USER CODE BEGIN PFP */
+uint32_t micros(void) {
+	return MicrosTimer->Instance->CNT;
+}
+
+uint32_t millis(void) {
+	return MillisTimer->Instance->CNT;
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -92,9 +133,53 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM1_Init();
   MX_TIM15_Init();
+  MX_TIM2_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of sampleEncoder */
+  sampleEncoderHandle = osThreadNew(sampleEncoderFn, NULL, &sampleEncoder_attributes);
+
+  /* creation of servoCmd */
+  servoCmdHandle = osThreadNew(servoCmdFn, NULL, &servoCmd_attributes);
+
+  /* creation of logData */
+  logDataHandle = osThreadNew(logDataFn, NULL, &logData_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -205,6 +290,98 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 144-1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM8 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM8_Init(void)
+{
+
+  /* USER CODE BEGIN TIM8_Init 0 */
+
+  /* USER CODE END TIM8_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM8_Init 1 */
+
+  /* USER CODE END TIM8_Init 1 */
+  htim8.Instance = TIM8;
+  htim8.Init.Prescaler = 144-1;
+  htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim8.Init.Period = 65535;
+  htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim8.Init.RepetitionCounter = 0;
+  htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim8, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim8, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM8_Init 2 */
+
+  /* USER CODE END TIM8_Init 2 */
+
+}
+
+/**
   * @brief TIM15 Initialization Function
   * @param None
   * @retval None
@@ -225,9 +402,9 @@ static void MX_TIM15_Init(void)
 
   /* USER CODE END TIM15_Init 1 */
   htim15.Instance = TIM15;
-  htim15.Init.Prescaler = 0;
+  htim15.Init.Prescaler = 15-1;
   htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim15.Init.Period = 65535;
+  htim15.Init.Period = 31999;
   htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim15.Init.RepetitionCounter = 0;
   htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -301,6 +478,119 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_sampleEncoderFn */
+/**
+  * @brief  Function implementing the sampleEncoder thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_sampleEncoderFn */
+void sampleEncoderFn(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+	encoderHandle_t eHandlePtr = {
+				.encTimer = EncoderTimer,
+				.pulseVel = 0.0f,
+				.totalPulses = 0.
+		};
+
+	encoderStart(&eHandlePtr, 400, 1);
+
+	uint32_t previousTime = millis();
+	uint32_t currentTime = millis();
+	float dt = -1;
+	/* Infinite loop */
+	for(;;)
+	{
+	  // Calculate dt for this iteration
+	  dt = currentTime - previousTime;
+
+	  if (dt > ENC_SAMPLE_TIME_MS) {
+		  // Read from encoder
+		  sampleEncoder(&eHandlePtr, dt/1E3);
+
+		  // Update the current position
+//		  discStatus.currentPosition = eHandlePtr.totalPulses * ENC_TICKS_TO_DEG;
+
+	//		  // Add it to the queue - message priority ignored
+	//		  osMessageQueuePut(timEncoderHandle, &currentEncoder, 0, osWaitForever);
+
+		  previousTime = millis();
+	  }
+
+	  currentTime = millis();
+
+	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+	  osDelay(1);
+	}
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_servoCmdFn */
+/**
+* @brief Function implementing the servoCmd thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_servoCmdFn */
+void servoCmdFn(void *argument)
+{
+  /* USER CODE BEGIN servoCmdFn */
+	ServoHandle_t servo = {
+			.htim = ServoTimer,
+			.currentPos = 0,
+			.freqPWM = 300
+	};
+
+	servo_start(&servo);
+
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END servoCmdFn */
+}
+
+/* USER CODE BEGIN Header_logDataFn */
+/**
+* @brief Function implementing the logData thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_logDataFn */
+void logDataFn(void *argument)
+{
+  /* USER CODE BEGIN logDataFn */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END logDataFn */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.

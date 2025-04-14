@@ -1365,7 +1365,7 @@ void sampleEncoderFn(void *argument)
 	  currentTime = millis();
 
 	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-    osDelay(1);
+	  osDelay(1);
   }
   /* USER CODE END sampleEncoderFn */
 }
