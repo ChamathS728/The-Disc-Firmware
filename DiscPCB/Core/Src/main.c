@@ -165,7 +165,7 @@ TIM_HandleTypeDef* MicrosTimer = &htim2;
 TIM_HandleTypeDef* PWMTimer = &htim3;
 TIM_HandleTypeDef* PWMStopTimer = &htim4;
 TIM_HandleTypeDef* MillisTimer = &htim8;
-SPI_HandleTypeDef* StrelkaV2SPI = &hspi2;
+SPI_HandleTypeDef* SPICommsHandle = &hspi2;
 
 // Initialise buffers
 uint8_t txBuff[3] = {'x', 'y', 'z'};
@@ -257,7 +257,7 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
 	}
 
 	// Restart SPI comms
-	HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
+	HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
 }
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
@@ -280,7 +280,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == SPI2_CS_Pin) {
-		HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
+		HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
 	}
 }
 
@@ -1043,19 +1043,19 @@ void strelkaCommsFn(void *argument)
   memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
 
   // Start an initial transmitreceive
-  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
+  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
 
 //  // Start off receive with interrupts
-//  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
+//  HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
 //
 //  // Send initial message
-//  HAL_SPI_Transmit_IT(StrelkaV2SPI, txBuff, 3);
+//  HAL_SPI_Transmit_IT(SPICommsHandle, txBuff, 3);
 
   /* Infinite loop */
   for(;;)
   {
-//	  HAL_SPI_TransmitReceive_IT(StrelkaV2SPI, txBuff, rxBuff, 3);
-//	  HAL_SPI_Receive_IT(StrelkaV2SPI, rxDiscSPI, sizeof(rxDiscSPI));
+//	  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txBuff, rxBuff, 3);
+//	  HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
     osDelay(100);
   }
   /* USER CODE END 5 */
