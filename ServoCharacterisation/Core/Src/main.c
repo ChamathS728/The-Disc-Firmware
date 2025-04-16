@@ -74,6 +74,9 @@ TIM_HandleTypeDef* ServoTimer = &htim15;
 TIM_HandleTypeDef* MicrosTimer = &htim2;
 TIM_HandleTypeDef* MillisTimer = &htim8;
 
+float encoderPulses = 0;
+float position = 0.0f;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -174,6 +177,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
+  HAL_TIM_Base_Start(MicrosTimer);
+  HAL_TIM_Base_Start(MillisTimer);
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -402,9 +407,9 @@ static void MX_TIM15_Init(void)
 
   /* USER CODE END TIM15_Init 1 */
   htim15.Instance = TIM15;
-  htim15.Init.Prescaler = 15-1;
+  htim15.Init.Prescaler = 144-1;
   htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim15.Init.Period = 31999;
+  htim15.Init.Period = 65535;
   htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim15.Init.RepetitionCounter = 0;
   htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -510,6 +515,7 @@ void sampleEncoderFn(void *argument)
 		  // Read from encoder
 		  sampleEncoder(&eHandlePtr, dt/1E3);
 
+		  encoderPulses = (float) eHandlePtr.totalPulses;
 		  // Update the current position
 //		  discStatus.currentPosition = eHandlePtr.totalPulses * ENC_TICKS_TO_DEG;
 
@@ -543,14 +549,12 @@ void servoCmdFn(void *argument)
 
 	servo_start(&servo);
 
-	float position = 0.0f;
-
   /* Infinite loop */
   for(;;)
   {
-	  servo_move(&servo, position);
+	  new_servo_move(&servo, position);
 	  osDelay(500);
-	  position += 0.1;
+	  position += 0.05;
 	  if (position > 1) {
 		  position = 0;
 	  }

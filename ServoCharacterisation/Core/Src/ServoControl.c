@@ -67,3 +67,22 @@ void servo_move(ServoHandle_t* sHandle, float position) {
 	HAL_TIM_Base_Start(sHandle->htim);
 	HAL_TIM_PWM_Start(sHandle->htim, SERVO_CHANNEL);
 }
+
+void new_servo_move(ServoHandle_t* sHandle, float position) {
+	/*
+	 * Position should be float between 0 and 1
+	 *
+	 * Assumes that the PWM timer associated with the servo runs at 1MHz
+	 * */
+
+	HAL_TIM_PWM_Stop(sHandle->htim, SERVO_CHANNEL);
+	HAL_TIM_Base_Stop(sHandle->htim);
+
+	// Map position to a microsecond interval between 500 and 2500
+	float us = 500 + (2500 - 500)*position;
+
+	__HAL_TIM_SET_COMPARE(sHandle->htim, SERVO_CHANNEL, (uint16_t) us);
+
+	HAL_TIM_Base_Start(sHandle->htim);
+	HAL_TIM_PWM_Start(sHandle->htim, SERVO_CHANNEL);
+}

@@ -21,5 +21,6 @@ typedef struct ServoHandle {
 void servo_start(ServoHandle_t* sHandle);
 void servo_configure_freq(ServoHandle_t* sHandle, float pulseFreq);
 void servo_move(ServoHandle_t* sHandle, float position);
+void new_servo_move(ServoHandle_t* sHandle, float position);
 
 #endif /* INC_SERVOCONTROL_H_ */
