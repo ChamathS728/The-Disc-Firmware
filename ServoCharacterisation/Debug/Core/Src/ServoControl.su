@@ -1,0 +1,3 @@
+../Core/Src/ServoControl.c:10:6:servo_start	16	static
+../Core/Src/ServoControl.c:18:6:servo_configure_freq	64	static
+../Core/Src/ServoControl.c:56:6:servo_move	16	static

@@ -33,7 +33,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define ENC_SAMPLE_TIME_MS 10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -520,8 +520,6 @@ void sampleEncoderFn(void *argument)
 	  }
 
 	  currentTime = millis();
-
-	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 	  osDelay(1);
 	}
   /* USER CODE END 5 */
@@ -545,10 +543,26 @@ void servoCmdFn(void *argument)
 
 	servo_start(&servo);
 
+	float position = 0.0f;
+
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	  servo_move(&servo, position);
+	  osDelay(500);
+	  position += 0.1;
+	  if (position > 1) {
+		  position = 0;
+	  }
+
+//	  position += shouldCountUp*0.05;
+//
+//	  if (position > 1 && shouldCountUp == 1) {
+//		  shouldCountUp = -1;
+//	  }
+//	  else if (position < 0 && shouldCountUp == -1) {
+//		  shouldCountUp = 1;
+//	  }
   }
   /* USER CODE END servoCmdFn */
 }
