@@ -22,7 +22,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "SPI_Comms.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,13 +44,23 @@
 /* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
 
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim7;
+
 UART_HandleTypeDef huart2;
 
 /* Definitions for controlDisc */
 osThreadId_t controlDiscHandle;
 const osThreadAttr_t controlDisc_attributes = {
   .name = "controlDisc",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for printDiscSts */
+osThreadId_t printDiscStsHandle;
+const osThreadAttr_t printDiscSts_attributes = {
+  .name = "printDiscSts",
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
@@ -61,7 +72,10 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_TIM7_Init(void);
 void controlDiscFn(void *argument);
+void printDiscStsFn(void *argument);
 
 /* USER CODE BEGIN PFP */
 uint8_t txStrelkaSPI[10];
@@ -70,6 +84,9 @@ uint8_t txDiscSPI[10];
 uint8_t rxDiscSPI[10];
 
 SPI_HandleTypeDef* SPICommsHandle = &hspi1;
+TIM_HandleTypeDef* MicrosTimer = &htim2;
+TIM_HandleTypeDef* MillisTimer = &htim7;
+
 
 DeviceStatus_t discStatus = {
 		.currentPosition = 0,
@@ -84,10 +101,23 @@ DeviceStatus_t discStatus = {
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi);
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
-	// Master finished transmitting a target position
 
+	if (hspi == &hspi1) {
+		// Master finished transmitting a target position - read discStatus
+		PacketDeviceStatus_t* rcvd = (PacketDeviceStatus_t* ) rxStrelkaSPI;
 
-	// Read in the processed
+		discStatus.currentPosition = rcvd->currentPosition;
+		discStatus.targetPosition = rcvd->targetPosition;
+		// Read in the processed
+	}
+}
+
+uint32_t micros(void) {
+	return __HAL_TIM_GET_COUNTER(MicrosTimer);
+}
+
+uint16_t millis(void) {
+	return __HAL_TIM_GET_COUNTER(MillisTimer);
 }
 /* USER CODE END 0 */
 
@@ -122,6 +152,8 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
+  MX_TIM2_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -149,12 +181,18 @@ int main(void)
   /* creation of controlDisc */
   controlDiscHandle = osThreadNew(controlDiscFn, NULL, &controlDisc_attributes);
 
+  /* creation of printDiscSts */
+  printDiscStsHandle = osThreadNew(printDiscStsFn, NULL, &printDiscSts_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
+
+  HAL_TIM_Base_Start(MicrosTimer);
+  HAL_TIM_Base_Start(MillisTimer);
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -256,7 +294,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -270,6 +308,89 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 24-1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 24000-1;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 65535;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
 
 }
 
@@ -325,24 +446,24 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, ControlDisc_Pin|SPI1_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GreenLED_GPIO_Port, GreenLED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, PrintUART_Pin|GreenLED_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : SPI1_CS_Pin */
-  GPIO_InitStruct.Pin = SPI1_CS_Pin;
+  /*Configure GPIO pins : ControlDisc_Pin SPI1_CS_Pin */
+  GPIO_InitStruct.Pin = ControlDisc_Pin|SPI1_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SPI1_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : GreenLED_Pin */
-  GPIO_InitStruct.Pin = GreenLED_Pin;
+  /*Configure GPIO pins : PrintUART_Pin GreenLED_Pin */
+  GPIO_InitStruct.Pin = PrintUART_Pin|GreenLED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GreenLED_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -362,12 +483,63 @@ static void MX_GPIO_Init(void)
 void controlDiscFn(void *argument)
 {
   /* USER CODE BEGIN 5 */
-  /* Infinite loop */
+
+	float targetPosition = 0.0f;
+	float lowerLim = 0.0f;			// Min of 0 revolutions
+	float upperLim = 1.0f;		// Max of 1 revolution
+
+	int32_t counter = 0;
+	uint32_t timestamp = micros();
+
+	/* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	  // Get current timestamp
+	  timestamp = micros();
+
+	  // Transmit a new target position packet
+	  transmitTargetPosition(timestamp, (uint16_t) targetPosition*65535);
+
+	  counter += 1;
+	  if (counter > 20) {
+		  // Update target position if needed
+		  targetPosition += 0.05;
+		  counter = 0;
+		  if (targetPosition > upperLim) {
+			  targetPosition = lowerLim;
+		  }
+	  }
+
+	  HAL_GPIO_TogglePin(ControlDisc_GPIO_Port, ControlDisc_Pin);
+    osDelay(100);
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_printDiscStsFn */
+/**
+* @brief Function implementing the printDiscSts thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_printDiscStsFn */
+void printDiscStsFn(void *argument)
+{
+  /* USER CODE BEGIN printDiscStsFn */
+
+	uint8_t printBuff[16];
+
+	/* Infinite loop */
+  for(;;)
+  {
+	  // Sprintf data into buffer and UART across
+	  sprintf(printBuff, "%.2f,%.2f,%d\n", discStatus.currentPosition, discStatus.targetPosition, discStatus.currentTime);
+	  HAL_UART_Transmit(&huart2, printBuff, strlen(printBuff), 100);
+
+	  HAL_GPIO_TogglePin(PrintUART_GPIO_Port, PrintUART_Pin);
+    osDelay(100);
+  }
+  /* USER CODE END printDiscStsFn */
 }
 
 /**

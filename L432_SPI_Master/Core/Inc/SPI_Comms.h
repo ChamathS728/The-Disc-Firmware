@@ -12,6 +12,7 @@
 #include "String.h"
 #include "main.h"
 #include "cmsis_os.h"
+#include <stdlib.h>
 
 #define PACKET_TYPE_MOVE			0x10 	// Strelka sends an extension to reach
 #define PACKET_TYPE_RETRACT_FULL 	0x20 	// Strelka requests airbrakes fully closed
@@ -83,11 +84,11 @@ typedef struct __attribute__((packed)) {
 //void encodeExtendPacket(PacketExtendFull_t* packetPtr, uint32_t timestamp);
 
 // Status related functions
-void requestDiscStatus(PacketDeviceStatus_t* packetPtr); // Run by master
+void requestDiscStatus(void); // Run by master
 //void transmitDiscStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp); // Run by Disc
 
 // Movement related functions
-void transmitTargetPosition(PacketMove_t* packetPtr, uint32_t timestamp);
+void transmitTargetPosition(uint32_t timestamp, uint16_t position);
 //void receiveTargetPosition(PacketMove_t* packetPtr);
 
 #endif /* INC_SPI_COMMS_H_ */

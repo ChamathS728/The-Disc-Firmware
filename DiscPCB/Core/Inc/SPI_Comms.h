@@ -11,20 +11,26 @@
 #include "stm32g4xx_hal.h"
 #include "String.h"
 #include "main.h"
+#include "cmsis_os.h"
+#include <stdlib.h>
 
-
-#define PACKET_TYPE_MOVE			0x10 // Strelka sends an extension to reach
-#define PACKET_TYPE_RETRACT_FULL 	0x20 // Strelka requests airbrakes fully closed
-#define PACKET_TYPE_EXTEND_FULL 	0x30 // Strelka requests airbrakes fully open
-#define PACKET_TYPE_DEVICE_STATUS	0x40 // Strelka requests status of the Disc
-#define PACKET_TYPE_POWER			0x50 // Strelka requests battery voltage and current readings
+#define PACKET_TYPE_MOVE			0x10 	// Strelka sends an extension to reach
+#define PACKET_TYPE_RETRACT_FULL 	0x20 	// Strelka requests airbrakes fully closed
+#define PACKET_TYPE_EXTEND_FULL 	0x30 	// Strelka requests airbrakes fully open
+#define PACKET_TYPE_DEVICE_STATUS	0x40 	// Strelka requests status of the Disc
+#define PACKET_TYPE_POWER			0x50 	// Strelka requests battery voltage and current readings
 
 #define PACKET_SIZE_DISC_RX			7
 #define PACKET_SIZE_STRELKA_RX		13
 
 // Define this buffer within main.c to be used in SPI Receive IT/DMA calls
-extern uint8_t rxDiscSPI[8];
 extern DeviceStatus_t discStatus;
+extern SPI_HandleTypeDef* SPICommsHandle;
+
+extern uint8_t txStrelkaSPI[10];
+extern uint8_t rxStrelkaSPI[10];
+extern uint8_t txDiscSPI[10];
+extern uint8_t rxDiscSPI[10];
 
 typedef struct {
 	uint8_t packetType;
@@ -64,17 +70,25 @@ typedef struct __attribute__((packed)) {
 	uint32_t battI;
 } PacketPower_t;
 
-/* Decode and encode methods */
-uint16_t decodeMovePacket(void);		// Used by Disc to work out target position
-void decodeDeviceStatus(void);		// Used by Strelka to work out status of Disc
-void decodePower(void);				// Used by Strelka to work out Disc power consumption
+///* Decode and encode methods */
+//uint16_t decodeMovePacket(void);		// Used by Disc to work out target position
+//void decodeDeviceStatus(void);		// Used by Strelka to work out status of Disc
+//void decodePower(void);				// Used by Strelka to work out Disc power consumption
+//
+//// Both used by Disc to create packets for Strelka
+//void encodeDeviceStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp, uint16_t currentPosition, uint16_t targetPosition, uint8_t isMoving);
+//void encodePower(PacketPower_t* packetPtr, uint32_t timestamp, uint32_t battV, uint32_t battI);
+//
+//// Both used by Strelka to create packets for Disc
+//void encodeRetractPacket(PacketRetractFull_t* packetPtr, uint32_t timestamp);
+//void encodeExtendPacket(PacketExtendFull_t* packetPtr, uint32_t timestamp);
 
-// Both used by Disc to create packets for Strelka
-void encodeDeviceStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp, uint16_t currentPosition, uint16_t targetPosition, uint8_t isMoving);
-void encodePower(PacketPower_t* packetPtr, uint32_t timestamp, uint32_t battV, uint32_t battI);
+// Status related functions
+void requestDiscStatus(void); // Run by master
+//void transmitDiscStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp); // Run by Disc
 
-// Both used by Strelka to create packets for Disc
-void encodeRetractPacket(PacketRetractFull_t* packetPtr, uint32_t timestamp);
-void encodeExtendPacket(PacketExtendFull_t* packetPtr, uint32_t timestamp);
+// Movement related functions
+void transmitTargetPosition(uint32_t timestamp, uint16_t position);
+//void receiveTargetPosition(PacketMove_t* packetPtr);
 
 #endif /* INC_SPI_COMMS_H_ */

@@ -154,8 +154,11 @@ void sampleEncoderFn(void *argument);
 //uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
 //uint8_t txDiscSPI[PACKET_SIZE_STRELKA_RX];
 
-uint8_t rxDiscSPI[8];
-uint8_t txDiscSPI[8];
+uint8_t txStrelkaSPI[10];
+uint8_t rxStrelkaSPI[10];
+uint8_t txDiscSPI[10];
+uint8_t rxDiscSPI[10];
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -179,6 +182,8 @@ DeviceStatus_t discStatus = {
 		.targetPosition = 0,
 		.isMoving = 0
 };
+
+uint32_t timestamp = 0;
 
 uint8_t isTargetNew = 1;
 int numOfRevolutions = 0;
@@ -214,75 +219,108 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 //	HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 }
 
-void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
-	// Pull header straight from receive buffer
-	PacketHeader_t* header = (PacketHeader_t*) hspi->pRxBuffPtr; // FIXME
+//void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
+//	// Pull header straight from receive buffer
+//	PacketHeader_t* header = (PacketHeader_t*) hspi->pRxBuffPtr; // FIXME
+//
+//	// Get packet type from struct and go through each possibility
+//	switch (header->packetType) {
+//		case PACKET_TYPE_MOVE:
+//			// Decode move packet
+//			uint16_t targetPos = decodeMovePacket();
+//
+//			char printBuff[64];
+//			sprintf(printBuff, "%lu\n", targetPos);
+//			printf(printBuff);
+//
+//			// Notify stepper thread that target position has changed
+//			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
+//			break;
+//		case PACKET_TYPE_RETRACT_FULL:
+//			// FIXME - Overwrite target position
+//			printf("Retract Packet Received\n");
+//
+//			// Set target position in deviceStatusStruct
+//
+//			// Send back device status
+//
+//			// Notify stepper thread that target position has changed
+//			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
+//			break;
+//		case PACKET_TYPE_EXTEND_FULL:
+//			// FIXME - Overwrite target position
+//			printf("Extend Packet Received\n");
+//			// Set target position in deviceStatusStruct
+//
+//			// Send back device status
+//
+//			// Notify stepper thread that target position has changed
+//			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
+//			break;
+//		default:
+//			break;
+//	}
+//
+//	// Restart SPI comms
+//	HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
+//}
 
-	// Get packet type from struct and go through each possibility
-	switch (header->packetType) {
-		case PACKET_TYPE_MOVE:
-			// Decode move packet
-			uint16_t targetPos = decodeMovePacket();
-
-			char printBuff[64];
-			sprintf(printBuff, "%lu\n", targetPos);
-			printf(printBuff);
-
-			// Notify stepper thread that target position has changed
-			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
-			break;
-		case PACKET_TYPE_RETRACT_FULL:
-			// FIXME - Overwrite target position
-			printf("Retract Packet Received\n");
-
-			// Set target position in deviceStatusStruct
-
-			// Send back device status
-
-			// Notify stepper thread that target position has changed
-			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
-			break;
-		case PACKET_TYPE_EXTEND_FULL:
-			// FIXME - Overwrite target position
-			printf("Extend Packet Received\n");
-			// Set target position in deviceStatusStruct
-
-			// Send back device status
-
-			// Notify stepper thread that target position has changed
-			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
-			break;
-		default:
-			break;
-	}
-
-	// Restart SPI comms
-	HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
-}
+//void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
+//	// Grab data from the rxBuffer
+//// 	uint32_t rxData = (uint32_t) rxDiscSPI; // May not work
+//	uint64_t rxData;
+// 	memcpy(&rxData, rxDiscSPI, sizeof(rxDiscSPI));
+//
+//	if (rxData == 90) {
+//		// Set target position to 90
+//		discStatus.targetPosition = (float) 90;
+//	}
+//	else if (rxData == 0) {
+//		// Set target position to 90
+//		discStatus.targetPosition = (float) 0;
+//	}
+//
+//	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+//}
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
-	// Grab data from the rxBuffer
-// 	uint32_t rxData = (uint32_t) rxDiscSPI; // May not work
-	uint64_t rxData;
- 	memcpy(&rxData, rxDiscSPI, sizeof(rxDiscSPI));
+	/*
+	 * Example of an SPI TxRx callback that can be used on the Disc
+	 * */
 
-	if (rxData == 90) {
-		// Set target position to 90
-		discStatus.targetPosition = (float) 90;
-	}
-	else if (rxData == 0) {
-		// Set target position to 90
-		discStatus.targetPosition = (float) 0;
-	}
+	if (hspi == SPICommsHandle) {
+		// Cast packet to a header packet to only access the first byte
+		PacketHeader_t* header = (PacketHeader_t*) rxDiscSPI;
 
-	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+		switch (header->packetType) {
+			case PACKET_TYPE_MOVE:
+				// Decode the entire packet this time
+				PacketMove_t* packet = (PacketMove_t*) rxDiscSPI;
+				discStatus.targetPosition = (float) packet->targetPosition/65535;
+				break;
+			case PACKET_TYPE_DEVICE_STATUS:
+				break;
+		}
+		// Prepare the txBuffer on the Disc to have device status
+		PacketDeviceStatus_t statusPacket = {
+				.header = PACKET_TYPE_DEVICE_STATUS,
+				.currentPosition = discStatus.currentPosition,
+				.targetPosition = discStatus.targetPosition,
+				.isMoving = discStatus.isMoving,
+				.timestamp = timestamp
+		};
+		memcpy(txDiscSPI, &statusPacket, sizeof(statusPacket));
+		HAL_SPI_TransmitReceive_DMA(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
+	}
 }
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	if (GPIO_Pin == SPI2_CS_Pin) {
-		HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
-	}
-}
+
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+//	if (GPIO_Pin == SPI2_CS_Pin) {
+//		HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
+//		SPICommsHandle->State = HAL_SPI_STATE_READY;
+//	}
+//}
 
 uint32_t micros(void) {
 	return MicrosTimer->Instance->CNT;
@@ -637,7 +675,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.DataSize = SPI_DATASIZE_16BIT;
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
+  hspi2.Init.NSS = SPI_NSS_HARD_INPUT;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -992,22 +1030,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(MTR_NSLP_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SPI2_CS_Pin */
-  GPIO_InitStruct.Pin = SPI2_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(SPI2_CS_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pin : MTR_NRST_Pin */
   GPIO_InitStruct.Pin = MTR_NRST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(MTR_NRST_GPIO_Port, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -1043,7 +1071,7 @@ void strelkaCommsFn(void *argument)
   memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
 
   // Start an initial transmitreceive
-  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
+  HAL_SPI_TransmitReceive_DMA(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
 
 //  // Start off receive with interrupts
 //  HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
@@ -1056,7 +1084,10 @@ void strelkaCommsFn(void *argument)
   {
 //	  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txBuff, rxBuff, 3);
 //	  HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
-    osDelay(100);
+
+	  // Start an initial transmitreceive
+//	  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
+    osDelay(50);
   }
   /* USER CODE END 5 */
 }
@@ -1363,8 +1394,9 @@ void sampleEncoderFn(void *argument)
 	  }
 
 	  currentTime = millis();
+	  timestamp = millis();
 
-	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+//	  HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
 	  osDelay(1);
   }
   /* USER CODE END sampleEncoderFn */
