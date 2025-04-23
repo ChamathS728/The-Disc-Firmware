@@ -47,7 +47,7 @@
 #define BUZZ_PSC 9
 #define BUZZ_CHANNEL TIM_CHANNEL_2
 
-#define DEBUGGING 1
+//#define DEBUGGING 1
 
 #define ENC_SAMPLE_TIME_MS 10
 
@@ -127,6 +127,11 @@ osMessageQueueId_t timEncoderHandle;
 const osMessageQueueAttr_t timEncoder_attributes = {
   .name = "timEncoder"
 };
+/* Definitions for spiReadySem */
+osSemaphoreId_t spiReadySemHandle;
+const osSemaphoreAttr_t spiReadySem_attributes = {
+  .name = "spiReadySem"
+};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -188,6 +193,31 @@ uint32_t timestamp = 0;
 uint8_t isTargetNew = 1;
 int numOfRevolutions = 0;
 float error = -1;
+
+
+void SPI_Disc_ArmTransfer(void)
+{
+    // Wait for SPI to be ready (could also check state or use a flag)
+    if (osSemaphoreAcquire(spiReadySemHandle, 0) != osOK)
+        return;  // Already busy
+
+    // Load tx buffer with new response (if needed)
+    // For example: prepare a status packet
+    PacketDeviceStatus_t packet = {
+    		.header = PACKET_TYPE_DEVICE_STATUS,
+			.timestamp = timestamp,
+			.currentPosition = discStatus.currentPosition, 	// FIXME
+			.targetPosition = discStatus.targetPosition,	// FIXME
+			.isMoving = 1
+    };
+    memcpy(txDiscSPI, &packet, sizeof(packet));
+
+    // Arm the SPI slave to be ready for the master's transaction
+    if (HAL_SPI_TransmitReceive_IT(&hspi1, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI)) != HAL_OK)
+    {
+        osSemaphoreRelease(spiReadySemHandle);  // Clean up if failed
+    }
+}
 
 // Overwrite _write method to use printf for sending to computer
 int _write(int file, char *ptr, int len)
@@ -288,30 +318,66 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 	 * Example of an SPI TxRx callback that can be used on the Disc
 	 * */
 
-	if (hspi == SPICommsHandle) {
-		// Cast packet to a header packet to only access the first byte
-		PacketHeader_t* header = (PacketHeader_t*) rxDiscSPI;
+//	if (hspi == SPICommsHandle) {
+//		// Cast packet to a header packet to only access the first byte
+//		PacketHeader_t* header = (PacketHeader_t*) rxDiscSPI;
+//
+//		switch (header->packetType) {
+//			case PACKET_TYPE_MOVE:
+//				// Decode the entire packet this time
+//				PacketMove_t* packet = (PacketMove_t*) rxDiscSPI;
+//				discStatus.targetPosition = (float) packet->targetPosition/65535;
+//				break;
+//			case PACKET_TYPE_DEVICE_STATUS:
+//				break;
+//		}
+//		// Prepare the txBuffer on the Disc to have device status
+//		PacketDeviceStatus_t statusPacket = {
+//				.header = PACKET_TYPE_DEVICE_STATUS,
+//				.currentPosition = discStatus.currentPosition,
+//				.targetPosition = discStatus.targetPosition,
+//				.isMoving = discStatus.isMoving,
+//				.timestamp = timestamp
+//		};
+//		memcpy(txDiscSPI, &statusPacket, sizeof(statusPacket));
+//		HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
+//
+//	    if (hspi == SPICommsHandle) {
+//	        osSemaphoreRelease(spiTxRxSemaphore);  // mark peripheral as free
+//
+//	        // Optionally process rxDiscSPI here
+//	    }
+//	}
 
-		switch (header->packetType) {
-			case PACKET_TYPE_MOVE:
-				// Decode the entire packet this time
-				PacketMove_t* packet = (PacketMove_t*) rxDiscSPI;
-				discStatus.targetPosition = (float) packet->targetPosition/65535;
-				break;
-			case PACKET_TYPE_DEVICE_STATUS:
-				break;
-		}
-		// Prepare the txBuffer on the Disc to have device status
-		PacketDeviceStatus_t statusPacket = {
-				.header = PACKET_TYPE_DEVICE_STATUS,
-				.currentPosition = discStatus.currentPosition,
-				.targetPosition = discStatus.targetPosition,
-				.isMoving = discStatus.isMoving,
-				.timestamp = timestamp
-		};
-		memcpy(txDiscSPI, &statusPacket, sizeof(statusPacket));
-		HAL_SPI_TransmitReceive_DMA(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
-	}
+    if (hspi != SPICommsHandle) {
+    	return;
+    }
+
+    // Process incoming data
+    uint8_t header = rxDiscSPI[0];
+
+    switch (header)
+    {
+        case PACKET_TYPE_MOVE:  // Example: MOVE command
+        	PacketMove_t* movePacket = (PacketMove_t*) rxDiscSPI;
+
+            // Parse target position, etc.
+        	discStatus.targetPosition = movePacket->targetPosition;
+        	discStatus.currentTime = movePacket->timestamp;
+            break;
+
+        default:
+            break;
+    };
+
+    // Clear or update buffers as needed
+    memset(rxDiscSPI, 0, sizeof(rxDiscSPI));
+
+    // Re-arm for next transfer
+    SPI_Disc_ArmTransfer();
+
+    // Mark SPI as free
+    osSemaphoreRelease(spiReadySemHandle);
 }
 
 
@@ -381,6 +447,10 @@ int main(void)
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
+
+  /* Create the semaphores(s) */
+  /* creation of spiReadySem */
+  spiReadySemHandle = osSemaphoreNew(1, 1, &spiReadySem_attributes);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
@@ -1060,18 +1130,20 @@ void strelkaCommsFn(void *argument)
 
   // Initialise buffers
 
+  SPI_Disc_ArmTransfer();
+
 //  uint32_t strelkaNumber = 90;
 //  txBuff[0] = (strelkaNumber >> 24) & 0xFF;
 //  txBuff[1] = (strelkaNumber >> 16) & 0xFF;
 //  txBuff[2] = (strelkaNumber >> 8) & 0xFF;
 //  txBuff[3] = strelkaNumber & 0xFF;
 
-  // Fill TX buffer with something
-  uint32_t acknowledgePacket = 0x11;
-  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
-
-  // Start an initial transmitreceive
-  HAL_SPI_TransmitReceive_DMA(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
+//  // Fill TX buffer with something
+//  uint32_t acknowledgePacket = 0x11;
+//  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
+//
+//  // Start an initial transmitreceive
+//  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
 
 //  // Start off receive with interrupts
 //  HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
@@ -1087,7 +1159,7 @@ void strelkaCommsFn(void *argument)
 
 	  // Start an initial transmitreceive
 //	  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
-    osDelay(50);
+    osDelay(100);
   }
   /* USER CODE END 5 */
 }
@@ -1193,11 +1265,11 @@ void stepperCtrlFn(void *argument)
 	DRV_wakeup(mtrHandle);
 	DRV_start(mtrHandle);
 //	__HAL_TIM_SET_PRESCALER(mtrHandle->rotInfo->PWMPtr, 8);
-	DRV_microstep_config(mtrHandle, MICROSTEP_32);
-	DRV_set_pulse_freq(mtrHandle, 800);
+	DRV_microstep_config(mtrHandle, MICROSTEP_1);
+	DRV_set_pulse_freq(mtrHandle, 1200);
 
 	// Set up control loop parameters
-	float Kp = 1;
+	float Kp = 100;
 	float Ki = 0.00;
 	float Kd = 0.00;
 	float Tt = 2;
@@ -1209,7 +1281,7 @@ void stepperCtrlFn(void *argument)
 	float output_max = (float) mtrHandle->rotInfo->pulseFreq * dt;
 
 	float alpha = 0.9;
-	float setpoint = 360.0; // Positive here means clockwise ;-;
+	float setpoint = 1800.0; // Positive here means clockwise ;-;
 
 	PIDController_t PID = {
 		.Kp = Kp,
@@ -1227,7 +1299,7 @@ void stepperCtrlFn(void *argument)
 	};
 	discStatus.targetPosition = setpoint;
 
-	float deadband = 5.0f;
+	float deadband = 100.0f;
 
 	uint16_t lastPrintTime = millis();
 	uint16_t currentPrintTime = millis();
@@ -1292,15 +1364,15 @@ void stepperCtrlFn(void *argument)
 
 		  // Close enough, so set microsteps to 32 and drop the speed for
 		  // more holding torque
-		  DRV_microstep_config(mtrHandle, MICROSTEP_32);
-		  DRV_set_pulse_freq(mtrHandle, 200);
+//		  DRV_microstep_config(mtrHandle, MICROSTEP_32);
+//		  DRV_set_pulse_freq(mtrHandle, 200);
 
 //		  DRV_sleep(mtrHandle);
 //		  DRV_move_angle_rel_OL(mtrHandle, 0);
 
 		  // Now that it's close enough, fill the TX buffer with an acknowledgement
-		  uint32_t acknowledgePacket = 0x23;
-		  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
+//		  uint32_t acknowledgePacket = 0x23;
+//		  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
 	  }
 #ifdef DEBUGGING
 	  newTime = millis();
@@ -1369,7 +1441,7 @@ void sampleEncoderFn(void *argument)
 			.totalPulses = 0.
 	};
 
-	encoderStart(&eHandlePtr, 1000, 1);
+	encoderStart(&eHandlePtr, 1000, 10);
 
 	uint32_t previousTime = millis();
 	uint32_t currentTime = millis();

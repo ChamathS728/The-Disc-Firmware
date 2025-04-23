@@ -9,7 +9,7 @@
 
 void encoderStart(encoderHandle_t* encoderHandle, uint16_t encPPR, uint16_t gearRatio) {
 	__HAL_TIM_SET_AUTORELOAD(encoderHandle->encTimer, encPPR);
-	__HAL_TIM_SET_PRESCALER(encoderHandle->encTimer, gearRatio);
+	__HAL_TIM_SET_PRESCALER(encoderHandle->encTimer, gearRatio+1);
 
 	// Start the encoder half way
 	__HAL_TIM_SET_COUNTER(encoderHandle->encTimer, encoderHandle->encTimer->Instance->ARR/2);
