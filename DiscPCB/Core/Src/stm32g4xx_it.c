@@ -58,7 +58,6 @@
 extern PCD_HandleTypeDef hpcd_USB_FS;
 extern DMA_HandleTypeDef hdma_adc1;
 extern ADC_HandleTypeDef hadc1;
-extern CORDIC_HandleTypeDef hcordic;
 extern DMA_HandleTypeDef hdma_spi2_tx;
 extern DMA_HandleTypeDef hdma_spi2_rx;
 extern SPI_HandleTypeDef hspi1;
@@ -366,20 +365,6 @@ void DMA2_Channel2_IRQHandler(void)
   /* USER CODE BEGIN DMA2_Channel2_IRQn 1 */
 
   /* USER CODE END DMA2_Channel2_IRQn 1 */
-}
-
-/**
-  * @brief This function handles CORDIC interrupt.
-  */
-void CORDIC_IRQHandler(void)
-{
-  /* USER CODE BEGIN CORDIC_IRQn 0 */
-
-  /* USER CODE END CORDIC_IRQn 0 */
-  HAL_CORDIC_IRQHandler(&hcordic);
-  /* USER CODE BEGIN CORDIC_IRQn 1 */
-
-  /* USER CODE END CORDIC_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

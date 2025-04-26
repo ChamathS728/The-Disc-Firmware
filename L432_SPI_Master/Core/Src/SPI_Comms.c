@@ -6,42 +6,6 @@
  */
 #include "SPI_Comms.h"
 
-///* Decode and encode methods */
-//uint16_t decodeMovePacket(void) {
-//	// Used by Disc to work out target position
-//	static PacketMove_t packet;
-//	memcpy(&packet, rxDiscSPI, sizeof(packet));
-//
-//	if (packet.header != PACKET_TYPE_MOVE) {
-//		// If header does not match
-//		return;
-//	}
-//
-//	discStatus.targetPosition = packet.targetPosition;
-//	discStatus.currentTime = packet.timestamp;
-//
-//	// TODO - Handle timestamp and position values
-//	return packet.targetPosition;
-//}
-//
-//
-//void decodeDeviceStatus(void);		// Used by Strelka to work out status of Disc
-//void decodePower(void);				// Used by Strelka to work out Disc power consumption
-//
-//// Both used by Disc to create packets for Strelka
-//void encodeDeviceStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp, uint16_t currentPosition, uint16_t targetPosition, uint8_t isMoving);
-//void encodePower(PacketPower_t* packetPtr, uint32_t timestamp, uint32_t battV, uint32_t battI);
-//
-//// Both used by Strelka to create packets for Disc
-//void encodeRetractPacket(PacketRetractFull_t* packetPtr, uint32_t timestamp) {
-//	packetPtr->header = PACKET_TYPE_RETRACT_FULL;
-//	packetPtr->timestamp = timestamp;
-//}
-//void encodeExtendPacket(PacketExtendFull_t* packetPtr, uint32_t timestamp) {
-//	packetPtr->header = PACKET_TYPE_EXTEND_FULL;
-//	packetPtr->timestamp = timestamp;
-//}
-
 // Status related functions
 void requestDiscStatus(void) {
 	/*
@@ -71,30 +35,6 @@ void requestDiscStatus(void) {
 	// Now that the transmission is done, free the memory allocated for that tx packet
 	free(packetPtr);
 }
-
-
-//void transmitDiscStatus(PacketDeviceStatus_t* packetPtr, uint32_t timestamp) {
-//	/*
-//	 * Run by Disc after it's received a PacketDeviceStatus packet from Master
-//	 * This should run within the GPIO_EXTI_Callback run after the Master pulls CS low
-//	 * */
-//
-//	// Construct DEVICE_STATUS buffer
-//	PacketDeviceStatus_t packet = {
-//			.header = PACKET_TYPE_DEVICE_STATUS,
-//			.currentPosition = discStatus.currentPosition,
-//			.targetPosition = discStatus.targetPosition,
-//			.isMoving = discStatus.isMoving,
-//			.timestamp = timestamp
-//	};
-//	memcpy(&packet, txDiscSPI, sizeof(packet));
-//
-//	// Transmit the status packet. It should receive a DEVICE_STATUS packet from the Master
-//	HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
-//
-//	// NOTE - HAL_SPI_TxRxCpltCallback on Master should handle the received status data
-//		// For the Disc, there isn't really anything to handle
-//}
 
 // Movement related functions
 void transmitTargetPosition(uint32_t timestamp, uint16_t position) {
@@ -168,14 +108,3 @@ void transmitTargetPosition(uint32_t timestamp, uint16_t position) {
 //	}
 //}
 //
-//void exampleDisc_HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-//	/*
-//	 * Example of an EXTI callback tied to the CS pin of the Disc
-//	 *
-//	 * Replace matching CS pin as appropriate
-//	 * */
-//	if (GPIO_Pin == SPI1_CS_Pin) {
-//		HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
-//	}
-//
-//}

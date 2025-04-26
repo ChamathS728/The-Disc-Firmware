@@ -64,8 +64,6 @@
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
-CORDIC_HandleTypeDef hcordic;
-
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 DMA_HandleTypeDef hdma_spi2_tx;
@@ -145,7 +143,6 @@ static void MX_SPI1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
-static void MX_CORDIC_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM8_Init(void);
@@ -156,9 +153,6 @@ void stateMachineFn(void *argument);
 void sampleEncoderFn(void *argument);
 
 /* USER CODE BEGIN PFP */
-//uint8_t rxDiscSPI[PACKET_SIZE_STRELKA_RX];
-//uint8_t txDiscSPI[PACKET_SIZE_STRELKA_RX];
-
 uint8_t txStrelkaSPI[10];
 uint8_t rxStrelkaSPI[10];
 uint8_t txDiscSPI[10];
@@ -206,9 +200,9 @@ void SPI_Disc_ArmTransfer(void)
     PacketDeviceStatus_t packet = {
     		.header = PACKET_TYPE_DEVICE_STATUS,
 			.timestamp = timestamp,
-			.currentPosition = discStatus.currentPosition, 	// FIXME
-			.targetPosition = discStatus.targetPosition,	// FIXME
-			.isMoving = 1
+			.currentPosition = (uint16_t) ((discStatus.currentPosition / 360.0) * 65535), 	// FIXME
+			.targetPosition = (uint16_t) ((discStatus.targetPosition / 360.0) * 65535),	// FIXME
+			.isMoving = discStatus.isMoving
     };
     memcpy(txDiscSPI, &packet, sizeof(packet));
 
@@ -249,105 +243,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 //	HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 }
 
-//void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef* hspi) {
-//	// Pull header straight from receive buffer
-//	PacketHeader_t* header = (PacketHeader_t*) hspi->pRxBuffPtr; // FIXME
-//
-//	// Get packet type from struct and go through each possibility
-//	switch (header->packetType) {
-//		case PACKET_TYPE_MOVE:
-//			// Decode move packet
-//			uint16_t targetPos = decodeMovePacket();
-//
-//			char printBuff[64];
-//			sprintf(printBuff, "%lu\n", targetPos);
-//			printf(printBuff);
-//
-//			// Notify stepper thread that target position has changed
-//			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
-//			break;
-//		case PACKET_TYPE_RETRACT_FULL:
-//			// FIXME - Overwrite target position
-//			printf("Retract Packet Received\n");
-//
-//			// Set target position in deviceStatusStruct
-//
-//			// Send back device status
-//
-//			// Notify stepper thread that target position has changed
-//			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
-//			break;
-//		case PACKET_TYPE_EXTEND_FULL:
-//			// FIXME - Overwrite target position
-//			printf("Extend Packet Received\n");
-//			// Set target position in deviceStatusStruct
-//
-//			// Send back device status
-//
-//			// Notify stepper thread that target position has changed
-//			osThreadFlagsSet(stepperCtrlTaskHandle, isTargetNew);
-//			break;
-//		default:
-//			break;
-//	}
-//
-//	// Restart SPI comms
-//	HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
-//}
-
-//void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
-//	// Grab data from the rxBuffer
-//// 	uint32_t rxData = (uint32_t) rxDiscSPI; // May not work
-//	uint64_t rxData;
-// 	memcpy(&rxData, rxDiscSPI, sizeof(rxDiscSPI));
-//
-//	if (rxData == 90) {
-//		// Set target position to 90
-//		discStatus.targetPosition = (float) 90;
-//	}
-//	else if (rxData == 0) {
-//		// Set target position to 90
-//		discStatus.targetPosition = (float) 0;
-//	}
-//
-//	HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-//}
-
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
 	/*
 	 * Example of an SPI TxRx callback that can be used on the Disc
 	 * */
-
-//	if (hspi == SPICommsHandle) {
-//		// Cast packet to a header packet to only access the first byte
-//		PacketHeader_t* header = (PacketHeader_t*) rxDiscSPI;
-//
-//		switch (header->packetType) {
-//			case PACKET_TYPE_MOVE:
-//				// Decode the entire packet this time
-//				PacketMove_t* packet = (PacketMove_t*) rxDiscSPI;
-//				discStatus.targetPosition = (float) packet->targetPosition/65535;
-//				break;
-//			case PACKET_TYPE_DEVICE_STATUS:
-//				break;
-//		}
-//		// Prepare the txBuffer on the Disc to have device status
-//		PacketDeviceStatus_t statusPacket = {
-//				.header = PACKET_TYPE_DEVICE_STATUS,
-//				.currentPosition = discStatus.currentPosition,
-//				.targetPosition = discStatus.targetPosition,
-//				.isMoving = discStatus.isMoving,
-//				.timestamp = timestamp
-//		};
-//		memcpy(txDiscSPI, &statusPacket, sizeof(statusPacket));
-//		HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
-//
-//	    if (hspi == SPICommsHandle) {
-//	        osSemaphoreRelease(spiTxRxSemaphore);  // mark peripheral as free
-//
-//	        // Optionally process rxDiscSPI here
-//	    }
-//	}
 
     if (hspi != SPICommsHandle) {
     	return;
@@ -379,14 +278,6 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
     // Mark SPI as free
     osSemaphoreRelease(spiReadySemHandle);
 }
-
-
-//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-//	if (GPIO_Pin == SPI2_CS_Pin) {
-//		HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(rxDiscSPI));
-//		SPICommsHandle->State = HAL_SPI_STATE_READY;
-//	}
-//}
 
 uint32_t micros(void) {
 	return MicrosTimer->Instance->CNT;
@@ -433,7 +324,6 @@ int main(void)
   MX_SPI2_Init();
   MX_TIM1_Init();
   MX_TIM3_Init();
-  MX_CORDIC_Init();
   MX_TIM4_Init();
   MX_TIM2_Init();
   MX_TIM8_Init();
@@ -655,32 +545,6 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief CORDIC Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_CORDIC_Init(void)
-{
-
-  /* USER CODE BEGIN CORDIC_Init 0 */
-
-  /* USER CODE END CORDIC_Init 0 */
-
-  /* USER CODE BEGIN CORDIC_Init 1 */
-
-  /* USER CODE END CORDIC_Init 1 */
-  hcordic.Instance = CORDIC;
-  if (HAL_CORDIC_Init(&hcordic) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN CORDIC_Init 2 */
-
-  /* USER CODE END CORDIC_Init 2 */
 
 }
 
@@ -1348,6 +1212,7 @@ void stepperCtrlFn(void *argument)
 
 		  // Get number of steps for this iteration of the control loop
 		  DRV_move_angle_rel_OL(mtrHandle, outPID);
+		  discStatus.isMoving = 1;
 
 	  }
 	  else {
@@ -1364,8 +1229,10 @@ void stepperCtrlFn(void *argument)
 
 		  // Close enough, so set microsteps to 32 and drop the speed for
 		  // more holding torque
-//		  DRV_microstep_config(mtrHandle, MICROSTEP_32);
-//		  DRV_set_pulse_freq(mtrHandle, 200);
+		  DRV_microstep_config(mtrHandle, MICROSTEP_32);
+		  DRV_set_pulse_freq(mtrHandle, 200);
+
+		  discStatus.isMoving = 0;
 
 //		  DRV_sleep(mtrHandle);
 //		  DRV_move_angle_rel_OL(mtrHandle, 0);
