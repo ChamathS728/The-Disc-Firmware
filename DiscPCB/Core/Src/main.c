@@ -27,7 +27,7 @@
 #include "discStateMachine.h"
 #include "stdio.h"
 #include "threadFlags.h"
-#include "SPI_Comms.h"
+//#include "SPI_Comms.h"
 #include "PID.h"
 #include "encoder.h"
 #include "string.h"
@@ -53,6 +53,10 @@
 
 #define ENC_TICKS_TO_DEG 0.09
 #define DEG_TO_ENC_TICKS 11.11
+
+#define PWM_SCALE 10000
+#define PWM_SHIFT 750
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -65,15 +69,13 @@ ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
 SPI_HandleTypeDef hspi1;
-SPI_HandleTypeDef hspi2;
-DMA_HandleTypeDef hdma_spi2_tx;
-DMA_HandleTypeDef hdma_spi2_rx;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
+TIM_HandleTypeDef htim15;
 
 /* Definitions for strelkaCommsTas */
 osThreadId_t strelkaCommsTasHandle;
@@ -140,12 +142,12 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
-static void MX_SPI2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM8_Init(void);
+static void MX_TIM15_Init(void);
 void strelkaCommsFn(void *argument);
 void powerSenseFn(void *argument);
 void stepperCtrlFn(void *argument);
@@ -167,7 +169,8 @@ TIM_HandleTypeDef* MicrosTimer = &htim2;
 TIM_HandleTypeDef* PWMTimer = &htim3;
 TIM_HandleTypeDef* PWMStopTimer = &htim4;
 TIM_HandleTypeDef* MillisTimer = &htim8;
-SPI_HandleTypeDef* SPICommsHandle = &hspi2;
+TIM_HandleTypeDef* PWMReadTimer = &htim15;
+
 
 // Initialise buffers
 uint8_t txBuff[3] = {'x', 'y', 'z'};
@@ -188,30 +191,10 @@ uint8_t isTargetNew = 1;
 int numOfRevolutions = 0;
 float error = -1;
 
+int32_t inFreq = -1;
+int32_t inDutyCycle = -1;
+uint32_t captureValue = 0;
 
-void SPI_Disc_ArmTransfer(void)
-{
-    // Wait for SPI to be ready (could also check state or use a flag)
-    if (osSemaphoreAcquire(spiReadySemHandle, 0) != osOK)
-        return;  // Already busy
-
-    // Load tx buffer with new response (if needed)
-    // For example: prepare a status packet
-    PacketDeviceStatus_t packet = {
-    		.header = PACKET_TYPE_DEVICE_STATUS,
-			.timestamp = timestamp,
-			.currentPosition = (uint16_t) ((discStatus.currentPosition / 360.0) * 65535), 	// FIXME
-			.targetPosition = (uint16_t) ((discStatus.targetPosition / 360.0) * 65535),	// FIXME
-			.isMoving = discStatus.isMoving
-    };
-    memcpy(txDiscSPI, &packet, sizeof(packet));
-
-    // Arm the SPI slave to be ready for the master's transaction
-    if (HAL_SPI_TransmitReceive_IT(&hspi1, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI)) != HAL_OK)
-    {
-        osSemaphoreRelease(spiReadySemHandle);  // Clean up if failed
-    }
-}
 
 // Overwrite _write method to use printf for sending to computer
 int _write(int file, char *ptr, int len)
@@ -243,42 +226,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 //	HAL_ADC_Start_DMA(&hadc1, buffADC, 4);
 }
 
-void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi) {
-	/*
-	 * Example of an SPI TxRx callback that can be used on the Disc
-	 * */
-
-    if (hspi != SPICommsHandle) {
-    	return;
-    }
-
-    // Process incoming data
-    uint8_t header = rxDiscSPI[0];
-
-    switch (header)
-    {
-        case PACKET_TYPE_MOVE:  // Example: MOVE command
-        	PacketMove_t* movePacket = (PacketMove_t*) rxDiscSPI;
-
-            // Parse target position, etc.
-        	discStatus.targetPosition = movePacket->targetPosition;
-        	discStatus.currentTime = movePacket->timestamp;
-            break;
-
-        default:
-            break;
-    };
-
-    // Clear or update buffers as needed
-    memset(rxDiscSPI, 0, sizeof(rxDiscSPI));
-
-    // Re-arm for next transfer
-    SPI_Disc_ArmTransfer();
-
-    // Mark SPI as free
-    osSemaphoreRelease(spiReadySemHandle);
-}
-
 uint32_t micros(void) {
 	return MicrosTimer->Instance->CNT;
 }
@@ -286,6 +233,19 @@ uint32_t micros(void) {
 uint32_t millis(void) {
 	return MillisTimer->Instance->CNT;
 }
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+	if (htim == PWMReadTimer) {
+	    if(htim ->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+	        capture_value = HAL_TIM_ReadCapturedValue(PWMReadTimer, TIM_CHANNEL_1);
+			if(capture_value) {
+				inFreq = SystemCoreClock / (capture_value);
+				inDutyCycle = PWM_SCALE * HAL_TIM_ReadCapturedValue(PWMReadTimer, TIM_CHANNEL_2) / capture_value - PWM_SHIFT;
+			}
+	    }
+	}
+}
+
 
 /* USER CODE END 0 */
 
@@ -321,12 +281,12 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
-  MX_SPI2_Init();
   MX_TIM1_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
   MX_TIM2_Init();
   MX_TIM8_Init();
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -388,6 +348,7 @@ int main(void)
   /* add events, ... */
   HAL_TIM_Base_Start(MicrosTimer);
   HAL_TIM_Base_Start(MillisTimer);
+  HAL_TIM_Base_Start(PWMReadTimer);
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -584,45 +545,6 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
-
-}
-
-/**
-  * @brief SPI2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI2_Init(void)
-{
-
-  /* USER CODE BEGIN SPI2_Init 0 */
-
-  /* USER CODE END SPI2_Init 0 */
-
-  /* USER CODE BEGIN SPI2_Init 1 */
-
-  /* USER CODE END SPI2_Init 1 */
-  /* SPI2 parameter configuration*/
-  hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_SLAVE;
-  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_16BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_HARD_INPUT;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi2.Init.CRCPolynomial = 7;
-  hspi2.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi2.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
-  if (HAL_SPI_Init(&hspi2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI2_Init 2 */
-
-  /* USER CODE END SPI2_Init 2 */
 
 }
 
@@ -880,6 +802,71 @@ static void MX_TIM8_Init(void)
 }
 
 /**
+  * @brief TIM15 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM15_Init(void)
+{
+
+  /* USER CODE BEGIN TIM15_Init 0 */
+
+  /* USER CODE END TIM15_Init 0 */
+
+  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM15_Init 1 */
+
+  /* USER CODE END TIM15_Init 1 */
+  htim15.Instance = TIM15;
+  htim15.Init.Prescaler = 0;
+  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim15.Init.Period = 65535;
+  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim15.Init.RepetitionCounter = 0;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_IC_Init(&htim15) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_RESET;
+  sSlaveConfig.InputTrigger = TIM_TS_TI1FP1;
+  sSlaveConfig.TriggerPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sSlaveConfig.TriggerPrescaler = TIM_ICPSC_DIV1;
+  sSlaveConfig.TriggerFilter = 0;
+  if (HAL_TIM_SlaveConfigSynchro(&htim15, &sSlaveConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim15, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_INDIRECTTI;
+  if (HAL_TIM_IC_ConfigChannel(&htim15, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM15_Init 2 */
+
+  /* USER CODE END TIM15_Init 2 */
+
+}
+
+/**
   * Enable DMA controller clock
   */
 static void MX_DMA_Init(void)
@@ -888,18 +875,11 @@ static void MX_DMA_Init(void)
   /* DMA controller clock enable */
   __HAL_RCC_DMAMUX1_CLK_ENABLE();
   __HAL_RCC_DMA1_CLK_ENABLE();
-  __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA2_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
-  /* DMA2_Channel2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Channel2_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Channel2_IRQn);
 
 }
 
@@ -992,38 +972,11 @@ void strelkaCommsFn(void *argument)
   MX_USB_Device_Init();
   /* USER CODE BEGIN 5 */
 
-  // Initialise buffers
-
-  SPI_Disc_ArmTransfer();
-
-//  uint32_t strelkaNumber = 90;
-//  txBuff[0] = (strelkaNumber >> 24) & 0xFF;
-//  txBuff[1] = (strelkaNumber >> 16) & 0xFF;
-//  txBuff[2] = (strelkaNumber >> 8) & 0xFF;
-//  txBuff[3] = strelkaNumber & 0xFF;
-
-//  // Fill TX buffer with something
-//  uint32_t acknowledgePacket = 0x11;
-//  memcpy(txDiscSPI, &acknowledgePacket, sizeof(acknowledgePacket));
-//
-//  // Start an initial transmitreceive
-//  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
-
-//  // Start off receive with interrupts
-//  HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
-//
-//  // Send initial message
-//  HAL_SPI_Transmit_IT(SPICommsHandle, txBuff, 3);
-
   /* Infinite loop */
   for(;;)
   {
-//	  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txBuff, rxBuff, 3);
-//	  HAL_SPI_Receive_IT(SPICommsHandle, rxDiscSPI, sizeof(rxDiscSPI));
 
-	  // Start an initial transmitreceive
-//	  HAL_SPI_TransmitReceive_IT(SPICommsHandle, txDiscSPI, rxDiscSPI, sizeof(txDiscSPI));
-    osDelay(100);
+	  osDelay(100);
   }
   /* USER CODE END 5 */
 }
